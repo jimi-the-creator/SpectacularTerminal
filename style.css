@@ -1,0 +1,98 @@
+/* =========================
+   1. AMBER PHOSPHOR TEXT
+   ========================= */
+   .terminal-text {
+    -fx-font-family: "Courier New";
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #00E5CC;
+
+    /* CRT glow */
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 229, 204, 0.75), 12, 0.4, 0, 0);
+}
+
+/* =========================
+   2. INPUT FIELD (FLAT CRT STYLE)
+   ========================= */
+.terminal-input {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 0;
+
+    -fx-text-fill: #00E5CC;
+    -fx-font-family: "Courier New";
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+
+    /* Slightly lighter glow than static text for readability */
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 229, 204, 0.5), 8, 0.3, 0, 0);
+}
+
+/* Focus state (important: DO NOT fully remove styling or it breaks UX feedback) */
+.terminal-input:focused {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-prompt-text-fill: rgba(0, 229, 204, 0.3);
+}
+
+/* =========================
+   3. INDUSTRIAL BUTTON
+   ========================= */
+.start-button {
+    -fx-background-color: linear-gradient(to bottom, #00E5CC 0%, #00A896 100%);
+    -fx-text-fill: #001a17;
+
+    -fx-font-family: "Courier New";
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+
+    -fx-padding: 10 22 10 22;
+    -fx-background-radius: 2;
+
+    -fx-border-color: #004d45;
+    -fx-border-width: 2px;
+
+    -fx-cursor: hand;
+}
+
+.start-button:hover {
+    -fx-background-color: #00FFE0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 229, 204, 0.7), 20, 0.4, 0, 0);
+}
+
+.start-button:pressed {
+    -fx-background-color: #007a6e;
+    -fx-translate-y: 2px;
+}
+
+/* =========================
+   4. SCANLINE OVERLAY (FIXED FOR JAVAFX)
+   ========================= */
+.glass-overlay {
+    -fx-background-color: transparent;
+
+    /* Proper JavaFX-compatible scanline effect */
+    -fx-background-image: 
+        repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0) 0px,
+            rgba(0, 0, 0, 0) 2px,
+            rgba(0, 0, 0, 0.25) 3px
+        );
+
+    -fx-opacity: 0.5;
+}
+
+/* =========================
+   5. CHECKBOX STYLING
+   ========================= */
+.check-box .box {
+    -fx-background-color: #000d0b;
+    -fx-border-color: #00E5CC;
+    -fx-border-width: 1px;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: #00E5CC;
+}

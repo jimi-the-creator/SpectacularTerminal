@@ -1,30 +1,24 @@
 import pygame
 from pathlib import Path
 import random
+import math
+import array
 
-# Audio must be initialized before pygame.init()
+# Audio setup
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
-pygame.mixer.set_num_channels(48)
+pygame.mixer.set_num_channels(32)
 
 print("Mixer initialized as:", pygame.mixer.get_init())
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRAME_PATH = BASE_DIR / "assets" / "frame.png"
-SOUND_DIR = BASE_DIR / "sounds"
 
-# Fallback surface if your assets folder isn't set up yet
-try:
-    frame = pygame.image.load(FRAME_PATH)
-    WIDTH, HEIGHT = frame.get_size()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    frame = frame.convert()
-except FileNotFoundError:
-    print(f"Asset not found at {FRAME_PATH}. Using a default 1600x900 window.")
-    WIDTH, HEIGHT = 1600, 900
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    frame = pygame.Surface((WIDTH, HEIGHT))
-    frame.fill((10, 15, 12))
+frame = pygame.image.load(FRAME_PATH)
+
+WIDTH, HEIGHT = frame.get_size()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+frame = frame.convert()
 
 pygame.display.set_caption("Spectacular Terminal")
 
@@ -50,41 +44,68 @@ cursor_timer = 0
 
 
 # ----------------------------
-# SAMPLED TECH SOUND BANK
+# SOUND LAYER — PEACEFUL VERSION
 # ----------------------------
 
-def load_sound(filename, volume=0.35):
-    path = SOUND_DIR / filename
+def make_click(freq=500, duration_ms=42, volume=0.22):
+    sample_rate = 44100
+    n_samples = int(sample_rate * duration_ms / 1000)
+    samples = array.array("h")
 
-    if not path.exists():
-        raise FileNotFoundError(f"Missing sound file: {path}")
+    for i in range(n_samples):
+        t = i / sample_rate
 
-    sound = pygame.mixer.Sound(str(path))
-    sound.set_volume(volume)
-    return sound
+        # Tiny fade-in prevents harsh popping
+        attack = min(1.0, t / 0.004)
+
+        # Smooth fast decay: short, soft, tactile
+        envelope = attack * math.exp(-48 * t)
+
+        # Soft technical tone blend
+        wave = (
+            math.sin(2 * math.pi * freq * t) * 0.78 +
+            math.sin(2 * math.pi * (freq * 1.35) * t) * 0.16 +
+            math.sin(2 * math.pi * (freq * 2.10) * t) * 0.06
+        )
+
+        value = int(32767 * volume * wave * envelope)
+
+        # Stereo output
+        samples.append(value)
+        samples.append(value)
+
+    return pygame.mixer.Sound(buffer=samples.tobytes())
 
 
-# Normal letters randomly choose from this bank
-key_clicks = [
-    load_sound("key_01.wav", 0.34),
-    load_sound("key_02.wav", 0.34),
-    load_sound("key_03.wav", 0.34),
-    load_sound("key_04.wav", 0.34),
-    load_sound("key_05.wav", 0.34),
-    load_sound("key_06.wav", 0.34),
+key_sounds = [
+    make_click(
+        freq=random.randint(430, 650),
+        duration_ms=random.randint(32, 46),
+        volume=random.uniform(0.20, 0.30)
+    )
+    for _ in range(14)
 ]
 
-# Special keys
-backspace_clicks = [
-    load_sound("backspace.wav", 0.42),
+backspace_sounds = [
+    make_click(
+        freq=random.randint(300, 440),
+        duration_ms=random.randint(42, 58),
+        volume=random.uniform(0.24, 0.34)
+    )
+    for _ in range(5)
 ]
 
-enter_clicks = [
-    load_sound("enter.wav", 0.48),
+enter_sounds = [
+    make_click(
+        freq=random.randint(220, 360),
+        duration_ms=random.randint(60, 82),
+        volume=random.uniform(0.30, 0.42)
+    )
+    for _ in range(4)
 ]
 
 
-def play_random(sound_bank, label="sound"):
+def play_random(sound_bank):
     if sound_bank:
         random.choice(sound_bank).play()
 
@@ -116,13 +137,13 @@ def wrap_text(text, font, max_width):
 def draw_glow_text(surface, text, pos):
     x, y = pos
 
-    # Glow pass
+    # Soft glow pass
     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
         glow = font.render(text, True, GLOW_COLOR)
         glow.set_alpha(80)
         surface.blit(glow, (x + dx, y + dy))
 
-    # Sharp text pass
+    # Sharp readable text
     rendered = font.render(text, True, TEXT_COLOR)
     surface.blit(rendered, (x, y))
 
@@ -151,19 +172,19 @@ while running:
 
             elif event.key == pygame.K_BACKSPACE:
                 buffer = buffer[:-1]
-                play_random(backspace_clicks, "backspace")
+                play_random(backspace_sounds)
 
             elif event.key == pygame.K_RETURN:
                 buffer += "\n"
-                play_random(enter_clicks, "enter")
+                play_random(enter_sounds)
 
-            elif event.unicode and event.unicode.isprintable():
+            elif event.unicode:
                 buffer += event.unicode
-                play_random(key_clicks, "key")
+                play_random(key_sounds)
 
     screen.blit(frame, (0, 0))
 
-    # Subtle screen tint inside terminal bounds
+    # Subtle screen tint so text feels embedded in the display
     overlay = pygame.Surface((TERMINAL_RECT.width, TERMINAL_RECT.height), pygame.SRCALPHA)
     overlay.fill((0, 25, 22, 28))
     screen.blit(overlay, TERMINAL_RECT.topleft)

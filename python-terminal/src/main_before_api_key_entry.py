@@ -1,7 +1,6 @@
 import pygame
 from pathlib import Path
 import random
-from config import save_api_key, provider_configured, configured_providers
 
 # ----------------------------
 # INIT
@@ -114,9 +113,6 @@ STATE_CONSTRAINT_READY = "CONSTRAINT_READY"
 STATE_TYPING_REFINEMENT = "TYPING_REFINEMENT"
 STATE_REFINEMENT = "REFINEMENT"
 STATE_API_SETTINGS = "API_SETTINGS"
-STATE_API_ENTER_OPENAI = "API_ENTER_OPENAI"
-STATE_API_ENTER_ANTHROPIC = "API_ENTER_ANTHROPIC"
-STATE_API_VIEW_PROVIDERS = "API_VIEW_PROVIDERS"
 
 state = STATE_BOOTING
 
@@ -381,73 +377,6 @@ def draw_glow_text(surface, text, pos):
     surface.blit(rendered, (x, y))
 
 
-def mask_key(value):
-    if not value:
-        return ""
-
-    if len(value) <= 8:
-        return "*" * len(value)
-
-    return value[:4] + ("*" * (len(value) - 8)) + value[-4:]
-
-
-def build_api_settings_screen():
-    openai_status = "CONFIGURED" if provider_configured("openai") else "NOT CONFIGURED"
-    anthropic_status = "CONFIGURED" if provider_configured("anthropic") else "NOT CONFIGURED"
-
-    return (
-        "MODE: API KEY SETTINGS\n"
-        "\n"
-        "Spectacular Terminal is a downloadable local tool.\n"
-        "Users bring their own API keys.\n"
-        "Keys are saved only to python-terminal/.env on this machine.\n"
-        "\n"
-        f"OpenAI: {openai_status}\n"
-        f"Anthropic: {anthropic_status}\n"
-        "\n"
-        "[1] Enter OpenAI API Key\n"
-        "[2] Enter Anthropic API Key\n"
-        "[3] View configured providers\n"
-        "\n"
-        "Press TAB to return to menu.\n"
-        "ENTER OPTION:\n"
-        "> "
-    )
-
-
-def build_api_key_entry_screen(provider_name):
-    return (
-        f"MODE: ENTER {provider_name.upper()} API KEY\n"
-        "\n"
-        "Paste your API key below.\n"
-        "It will be saved locally to python-terminal/.env.\n"
-        "It will not be committed to GitHub.\n"
-        "\n"
-        "Press ENTER to save.\n"
-        "Press TAB to cancel.\n"
-        "\n"
-        f"{provider_name.upper()} KEY:\n"
-        "> " + mask_key(buffer)
-    )
-
-
-def build_provider_status_screen():
-    providers = configured_providers()
-
-    if providers:
-        provider_text = "\n".join(f"[+] {provider}" for provider in providers)
-    else:
-        provider_text = "No providers configured."
-
-    return (
-        "MODE: CONFIGURED PROVIDERS\n"
-        "\n"
-        f"{provider_text}\n"
-        "\n"
-        "Press TAB to return to API Key Settings.\n"
-    )
-
-
 def get_screen_text():
     if state == STATE_BOOTING:
         return boot_text
@@ -474,16 +403,24 @@ def get_screen_text():
         return refinement_screen_script + buffer
 
     if state == STATE_API_SETTINGS:
-        return build_api_settings_screen()
-
-    if state == STATE_API_ENTER_OPENAI:
-        return build_api_key_entry_screen("OpenAI")
-
-    if state == STATE_API_ENTER_ANTHROPIC:
-        return build_api_key_entry_screen("Anthropic")
-
-    if state == STATE_API_VIEW_PROVIDERS:
-        return build_provider_status_screen()
+        return (
+            "MODE: API KEY SETTINGS\n"
+            "\n"
+            "Spectacular Terminal is designed as a downloadable local tool.\n"
+            "\n"
+            "Users will bring their own API keys.\n"
+            "Keys should stay on the user's machine and should never be committed to GitHub.\n"
+            "\n"
+            "Planned providers:\n"
+            "[1] OpenAI API Key\n"
+            "[2] Anthropic API Key\n"
+            "[3] View configured providers\n"
+            "\n"
+            "STATUS: Settings screen added. Secure key storage comes next.\n"
+            "\n"
+            "Press TAB to return to menu.\n"
+            "Press ESC to quit.\n"
+        )
 
     return buffer
 
@@ -621,77 +558,8 @@ while running:
                     play_enter_click()
 
             elif state == STATE_API_SETTINGS:
-                if event.unicode == "1":
-                    play_enter_click()
-                    state = STATE_API_ENTER_OPENAI
-                    buffer = ""
-
-                elif event.unicode == "2":
-                    play_enter_click()
-                    state = STATE_API_ENTER_ANTHROPIC
-                    buffer = ""
-
-                elif event.unicode == "3":
-                    play_enter_click()
-                    state = STATE_API_VIEW_PROVIDERS
-                    buffer = ""
-
-                elif event.key == pygame.K_TAB:
-                    reset_to_menu()
-                    play_enter_click()
-
-                elif event.key == pygame.K_BACKSPACE:
-                    buffer = buffer[:-1]
-                    play_backspace_click()
-
-                elif event.unicode and event.unicode.isprintable():
-                    buffer += event.unicode
-                    play_key_click()
-
-            elif state == STATE_API_ENTER_OPENAI:
-                if event.key == pygame.K_RETURN:
-                    save_api_key("openai", buffer)
-                    buffer = ""
-                    state = STATE_API_SETTINGS
-                    play_enter_click()
-
-                elif event.key == pygame.K_TAB:
-                    buffer = ""
-                    state = STATE_API_SETTINGS
-                    play_enter_click()
-
-                elif event.key == pygame.K_BACKSPACE:
-                    buffer = buffer[:-1]
-                    play_backspace_click()
-
-                elif event.unicode and event.unicode.isprintable():
-                    buffer += event.unicode
-                    play_key_click()
-
-            elif state == STATE_API_ENTER_ANTHROPIC:
-                if event.key == pygame.K_RETURN:
-                    save_api_key("anthropic", buffer)
-                    buffer = ""
-                    state = STATE_API_SETTINGS
-                    play_enter_click()
-
-                elif event.key == pygame.K_TAB:
-                    buffer = ""
-                    state = STATE_API_SETTINGS
-                    play_enter_click()
-
-                elif event.key == pygame.K_BACKSPACE:
-                    buffer = buffer[:-1]
-                    play_backspace_click()
-
-                elif event.unicode and event.unicode.isprintable():
-                    buffer += event.unicode
-                    play_key_click()
-
-            elif state == STATE_API_VIEW_PROVIDERS:
                 if event.key == pygame.K_TAB:
-                    state = STATE_API_SETTINGS
-                    buffer = ""
+                    reset_to_menu()
                     play_enter_click()
 
             elif state == STATE_REFINEMENT:

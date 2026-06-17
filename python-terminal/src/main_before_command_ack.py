@@ -122,7 +122,6 @@ def play_loading_click():
 
 STATE_BOOTING = "BOOTING"
 STATE_MENU = "MENU"
-STATE_COMMAND_ACK = "COMMAND_ACK"
 
 STATE_TYPING_CONSTRAINT = "TYPING_CONSTRAINT"
 STATE_CONSTRAINT_SELECT = "CONSTRAINT_SELECT"
@@ -137,11 +136,6 @@ STATE_API_ENTER_ANTHROPIC = "API_ENTER_ANTHROPIC"
 STATE_API_VIEW_PROVIDERS = "API_VIEW_PROVIDERS"
 
 state = STATE_BOOTING
-
-command_ack_text = ""
-command_ack_timer = 0
-command_ack_duration_ms = 850
-next_action_after_ack = None
 
 boot_script = (
     "SPECTACULAR TERMINAL INITIALIZING...\n"
@@ -364,29 +358,6 @@ def build_constraint_ready_screen():
     )
 
 
-def begin_command_ack(command_text, next_action):
-    global state, command_ack_text, command_ack_timer, next_action_after_ack, buffer
-
-    command_ack_text = command_text
-    command_ack_timer = 0
-    next_action_after_ack = next_action
-    buffer = ""
-    state = STATE_COMMAND_ACK
-
-
-def finish_command_ack():
-    global next_action_after_ack
-
-    if next_action_after_ack == "constraint":
-        begin_constraint_screen_typing()
-    elif next_action_after_ack == "refinement":
-        begin_refinement_screen_typing()
-    elif next_action_after_ack == "api_settings":
-        global state, buffer
-        state = STATE_API_SETTINGS
-        buffer = ""
-
-
 # ----------------------------
 # TEXT HELPERS
 # ----------------------------
@@ -525,9 +496,6 @@ def get_screen_text():
             get_idle_status_line() + "\nENTER MODE:\n> "
         )
         return menu_text + buffer
-
-    if state == STATE_COMMAND_ACK:
-        return command_ack_text
 
     if state == STATE_TYPING_CONSTRAINT:
         return screen_text
@@ -687,12 +655,6 @@ while running:
             state = next_state_after_screen_typing
             buffer = ""
 
-    elif state == STATE_COMMAND_ACK:
-        command_ack_timer += dt
-
-        if command_ack_timer >= command_ack_duration_ms:
-            finish_command_ack()
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -702,30 +664,22 @@ while running:
                 running = False
 
             # Ignore keyboard input while booting or while instructions are typing
-            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_COMMAND_ACK]:
+            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT]:
                 continue
 
             elif state == STATE_MENU:
                 if event.unicode == "1":
                     play_enter_click()
-                    begin_command_ack(
-                        "> 1\nACCESSING CONSTRAINT CONFLICT TEST...\n",
-                        "constraint"
-                    )
+                    begin_constraint_screen_typing()
 
                 elif event.unicode == "2":
                     play_enter_click()
-                    begin_command_ack(
-                        "> 2\nACCESSING PROMPT REFINEMENT...\n",
-                        "refinement"
-                    )
+                    begin_refinement_screen_typing()
 
                 elif event.unicode == "3":
                     play_enter_click()
-                    begin_command_ack(
-                        "> 3\nACCESSING API KEY SETTINGS...\n",
-                        "api_settings"
-                    )
+                    state = STATE_API_SETTINGS
+                    buffer = ""
 
                 elif event.key == pygame.K_BACKSPACE:
                     buffer = buffer[:-1]

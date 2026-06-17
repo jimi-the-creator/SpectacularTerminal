@@ -547,19 +547,6 @@ def get_cursor_alpha():
     return int(150 + pulse * 105)
 
 
-def get_screen_alive_alpha():
-    seconds = pygame.time.get_ticks() / 1000
-
-    # Slow breathing pulse
-    breath = (math.sin(seconds * 1.05) + 1) / 2
-
-    # Tiny electrical variation
-    micro_flicker = random.choice([0, 0, 0, 1, 1, 2, -1])
-
-    # Keep it subtle so it feels alive, not glitchy
-    return int(22 + breath * 6 + micro_flicker)
-
-
 # ----------------------------
 # MAIN LOOP
 # ----------------------------
@@ -833,7 +820,7 @@ while running:
     screen.blit(frame, (0, 0))
 
     overlay = pygame.Surface((TERMINAL_RECT.width, TERMINAL_RECT.height), pygame.SRCALPHA)
-    overlay.fill((0, 25, 22, get_screen_alive_alpha()))
+    overlay.fill((0, 25, 22, get_screen_breath_alpha()))
     screen.blit(overlay, TERMINAL_RECT.topleft)
 
     text_x = TERMINAL_RECT.x + PADDING_X

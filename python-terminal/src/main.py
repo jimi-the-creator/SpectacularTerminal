@@ -37,9 +37,9 @@ TERMINAL_RECT = pygame.Rect(165, 95, 1340, 690)
 PADDING_X = 35
 PADDING_Y = 35
 
-TEXT_COLOR = (120, 255, 235)
-GLOW_COLOR = (40, 180, 170)
-CURSOR_COLOR = (120, 255, 235)
+TEXT_COLOR = (230, 245, 245)
+GLOW_COLOR = (80, 170, 170)
+CURSOR_COLOR = (230, 245, 245)
 
 font = pygame.font.SysFont("menlo", 28)
 
@@ -77,7 +77,7 @@ if not key_clicks:
 
 backspace_click = load_sound("backspace.wav", 0.42)
 enter_click = load_sound("enter.wav", 0.48)
-loading_click = load_sound("loading_click.wav", 0.40, required=False)
+loading_click = load_sound("tech_rain_loading_tap.wav", 0.15, required=False)
 
 
 def play_key_click():
@@ -220,6 +220,7 @@ type_delay_ms = 24
 buffer = ""
 cursor_visible = True
 cursor_timer = 0
+loading_sound_counter = 0
 
 
 # ----------------------------

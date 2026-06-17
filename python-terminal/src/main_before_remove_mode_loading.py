@@ -267,20 +267,24 @@ loading_sound_counter = 0
 # ----------------------------
 
 def begin_constraint_screen_typing():
-    global state, buffer
+    global state, screen_index, screen_text, active_screen_script, next_state_after_screen_typing, buffer
 
-    # Show Constraint Conflict Test screen instantly.
-    # Boot still types in, but mode explanations do not.
-    state = STATE_CONSTRAINT_SELECT
+    state = STATE_TYPING_CONSTRAINT
+    screen_index = 0
+    screen_text = ""
+    active_screen_script = constraint_screen_script
+    next_state_after_screen_typing = STATE_CONSTRAINT_SELECT
     buffer = ""
 
 
 def begin_refinement_screen_typing():
-    global state, buffer
+    global state, screen_index, screen_text, active_screen_script, next_state_after_screen_typing, buffer
 
-    # Show Prompt Refinement screen instantly.
-    # Boot still types in, but mode explanations do not.
-    state = STATE_REFINEMENT
+    state = STATE_TYPING_REFINEMENT
+    screen_index = 0
+    screen_text = ""
+    active_screen_script = refinement_screen_script
+    next_state_after_screen_typing = STATE_REFINEMENT
     buffer = ""
 
 

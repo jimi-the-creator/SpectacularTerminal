@@ -37,3 +37,35 @@ def get_api_key(provider):
 
 def provider_configured(provider):
     return bool(get_api_key(provider))
+
+
+def save_api_key(provider, api_key):
+    config = load_env_file()
+
+    provider = provider.lower()
+
+    if provider == "openai":
+        config["OPENAI_API_KEY"] = api_key.strip()
+    elif provider == "anthropic":
+        config["ANTHROPIC_API_KEY"] = api_key.strip()
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    lines = [
+        f"OPENAI_API_KEY={config.get('OPENAI_API_KEY', '')}",
+        f"ANTHROPIC_API_KEY={config.get('ANTHROPIC_API_KEY', '')}",
+    ]
+
+    ENV_PATH.write_text("\n".join(lines) + "\n")
+
+
+def configured_providers():
+    providers = []
+
+    if provider_configured("openai"):
+        providers.append("OpenAI")
+
+    if provider_configured("anthropic"):
+        providers.append("Anthropic")
+
+    return providers

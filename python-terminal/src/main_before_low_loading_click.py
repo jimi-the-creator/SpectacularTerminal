@@ -94,7 +94,7 @@ if not key_clicks:
 
 backspace_click = load_sound("backspace.wav", 0.42)
 enter_click = load_sound("enter.wav", 0.48)
-loading_click = load_sound("low_loading_click.wav", 0.18, required=False)
+loading_click = load_sound("tech_rain_loading_tap.wav", 0.15, required=False)
 
 
 def play_key_click():

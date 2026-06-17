@@ -233,7 +233,6 @@ next_state_after_screen_typing = None
 
 type_timer = 0
 type_delay_ms = 24
-current_type_delay_ms = type_delay_ms
 
 buffer = ""
 cursor_visible = True
@@ -542,7 +541,7 @@ while running:
     if state == STATE_BOOTING:
         type_timer += dt
 
-        if type_timer >= current_type_delay_ms and boot_index < len(boot_script):
+        if type_timer >= type_delay_ms and boot_index < len(boot_script):
             type_timer = 0
             char = boot_script[boot_index]
             boot_text += char
@@ -550,26 +549,6 @@ while running:
 
             if char not in ["\n", " "]:
                 play_loading_click()
-
-            # Tiny timing variation makes the terminal feel less robotic.
-            if char in [".", ":", ";"]:
-                current_type_delay_ms = random.randint(45, 80)
-            elif char in ["\n"]:
-                current_type_delay_ms = random.randint(70, 120)
-            elif char == " ":
-                current_type_delay_ms = random.randint(12, 22)
-            else:
-                current_type_delay_ms = random.randint(16, 34)
-
-            # Tiny timing variation makes the terminal feel less robotic.
-            if char in [".", ":", ";"]:
-                current_type_delay_ms = random.randint(45, 80)
-            elif char in ["\n"]:
-                current_type_delay_ms = random.randint(70, 120)
-            elif char == " ":
-                current_type_delay_ms = random.randint(12, 22)
-            else:
-                current_type_delay_ms = random.randint(16, 34)
 
         if boot_index >= len(boot_script):
             state = STATE_MENU
@@ -579,7 +558,7 @@ while running:
     elif state in [STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT]:
         type_timer += dt
 
-        if type_timer >= current_type_delay_ms and screen_index < len(active_screen_script):
+        if type_timer >= type_delay_ms and screen_index < len(active_screen_script):
             type_timer = 0
             char = active_screen_script[screen_index]
             screen_text += char

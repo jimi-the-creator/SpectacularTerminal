@@ -112,7 +112,6 @@ STATE_CONSTRAINT_READY = "CONSTRAINT_READY"
 
 STATE_TYPING_REFINEMENT = "TYPING_REFINEMENT"
 STATE_REFINEMENT = "REFINEMENT"
-STATE_API_SETTINGS = "API_SETTINGS"
 
 state = STATE_BOOTING
 
@@ -126,7 +125,6 @@ boot_script = (
     "\n"
     "[1] CONSTRAINT CONFLICT TEST\n"
     "[2] PROMPT REFINEMENT\n"
-    "[3] API KEY SETTINGS\n"
     "\n"
     "ENTER MODE:\n"
     "> "
@@ -402,26 +400,6 @@ def get_screen_text():
     if state == STATE_REFINEMENT:
         return refinement_screen_script + buffer
 
-    if state == STATE_API_SETTINGS:
-        return (
-            "MODE: API KEY SETTINGS\n"
-            "\n"
-            "Spectacular Terminal is designed as a downloadable local tool.\n"
-            "\n"
-            "Users will bring their own API keys.\n"
-            "Keys should stay on the user's machine and should never be committed to GitHub.\n"
-            "\n"
-            "Planned providers:\n"
-            "[1] OpenAI API Key\n"
-            "[2] Anthropic API Key\n"
-            "[3] View configured providers\n"
-            "\n"
-            "STATUS: Settings screen added. Secure key storage comes next.\n"
-            "\n"
-            "Press TAB to return to menu.\n"
-            "Press ESC to quit.\n"
-        )
-
     return buffer
 
 
@@ -494,11 +472,6 @@ while running:
                     play_enter_click()
                     begin_refinement_screen_typing()
 
-                elif event.unicode == "3":
-                    play_enter_click()
-                    state = STATE_API_SETTINGS
-                    buffer = ""
-
                 elif event.key == pygame.K_BACKSPACE:
                     buffer = buffer[:-1]
                     play_backspace_click()
@@ -555,11 +528,6 @@ while running:
                     play_enter_click()
 
                 elif event.key == pygame.K_RETURN:
-                    play_enter_click()
-
-            elif state == STATE_API_SETTINGS:
-                if event.key == pygame.K_TAB:
-                    reset_to_menu()
                     play_enter_click()
 
             elif state == STATE_REFINEMENT:

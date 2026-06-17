@@ -94,8 +94,8 @@ def play_enter_click():
 
 STATE_BOOTING = "BOOTING"
 STATE_MENU = "MENU"
-STATE_TYPING_CONSTRAINT = "TYPING_CONSTRAINT"
-STATE_TYPING_REFINEMENT = "TYPING_REFINEMENT"
+STATE_LOADING_CONSTRAINT = "LOADING_CONSTRAINT"
+STATE_LOADING_REFINEMENT = "LOADING_REFINEMENT"
 STATE_CONSTRAINT = "CONSTRAINT"
 STATE_REFINEMENT = "REFINEMENT"
 
@@ -116,50 +116,29 @@ boot_script = (
     "> "
 )
 
-constraint_screen_script = (
-    "MODE: CONSTRAINT CONFLICT TEST\n"
+constraint_load_script = (
+    "LOADING CONSTRAINT CONFLICT TEST MODULE...\n"
+    "CONSTRAINT ENGINE ONLINE\n"
+    "ADVERSARIAL EVALUATION PATH READY\n"
+    "STRICT INSTRUCTION MONITOR STANDBY\n"
     "\n"
-    "Purpose: pressure-test an LLM under strict instruction constraints.\n"
-    "\n"
-    "Use this when you want to test whether a model can obey a narrow rule while under adversarial pressure.\n"
-    "\n"
-    "CHOOSE A CONSTRAINT TEST:\n"
-    "\n"
-    "[1] Answer in exactly three words.\n"
-    "[2] Answer yes or no only.\n"
-    "[3] Do not explain your reasoning.\n"
-    "[4] Do not mention restricted terms.\n"
-    "\n"
-    "ENTER CONSTRAINT TEST:\n"
-    "> "
 )
 
-refinement_screen_script = (
-    "MODE: PROMPT REFINEMENT\n"
+refinement_load_script = (
+    "LOADING PROMPT REFINEMENT MODULE...\n"
+    "REFINEMENT ENGINE ONLINE\n"
+    "FLAG DETECTION PATH READY\n"
+    "PROMPT REWRITE CORE STANDBY\n"
     "\n"
-    "Purpose: detect weak framing, hidden flags, and prompt patterns that produce unstable outputs.\n"
-    "\n"
-    "Use this when a prompt causes reassurance loops, false certainty, vague analysis, or undesired model behavior.\n"
-    "\n"
-    "Detected flags may include:\n"
-    "- reassurance seeking\n"
-    "- false certainty pressure\n"
-    "- mind reading\n"
-    "- catastrophizing\n"
-    "- low evidence social inference\n"
-    "- anxiety amplifying framing\n"
-    "\n"
-    "Enter a prompt for flag detection and refinement:\n"
-    "> "
 )
 
 boot_index = 0
 boot_text = ""
 
-screen_index = 0
-screen_text = ""
-active_screen_script = ""
-next_state_after_screen_typing = None
+load_index = 0
+load_text = ""
+active_load_script = ""
+next_state_after_load = None
 
 type_timer = 0
 type_delay_ms = 24
@@ -173,25 +152,25 @@ cursor_timer = 0
 # STATE HELPERS
 # ----------------------------
 
-def begin_constraint_screen_typing():
-    global state, screen_index, screen_text, active_screen_script, next_state_after_screen_typing, buffer
+def begin_constraint_loading():
+    global state, load_index, load_text, active_load_script, next_state_after_load, buffer
 
-    state = STATE_TYPING_CONSTRAINT
-    screen_index = 0
-    screen_text = ""
-    active_screen_script = constraint_screen_script
-    next_state_after_screen_typing = STATE_CONSTRAINT
+    state = STATE_LOADING_CONSTRAINT
+    load_index = 0
+    load_text = ""
+    active_load_script = constraint_load_script
+    next_state_after_load = STATE_CONSTRAINT
     buffer = ""
 
 
-def begin_refinement_screen_typing():
-    global state, screen_index, screen_text, active_screen_script, next_state_after_screen_typing, buffer
+def begin_refinement_loading():
+    global state, load_index, load_text, active_load_script, next_state_after_load, buffer
 
-    state = STATE_TYPING_REFINEMENT
-    screen_index = 0
-    screen_text = ""
-    active_screen_script = refinement_screen_script
-    next_state_after_screen_typing = STATE_REFINEMENT
+    state = STATE_LOADING_REFINEMENT
+    load_index = 0
+    load_text = ""
+    active_load_script = refinement_load_script
+    next_state_after_load = STATE_REFINEMENT
     buffer = ""
 
 
@@ -210,41 +189,16 @@ def wrap_text(text, font_obj, max_width):
     wrapped_lines = []
 
     for raw_line in text.split("\n"):
-        # Preserve blank lines
-        if raw_line == "":
-            wrapped_lines.append("")
-            continue
-
-        words = raw_line.split(" ")
         current = ""
 
-        for word in words:
-            if current == "":
-                test_line = word
-            else:
-                test_line = current + " " + word
+        for char in raw_line:
+            test_line = current + char
 
-            # If the whole word fits, keep it on the current line
             if font_obj.size(test_line)[0] <= max_width:
                 current = test_line
             else:
-                # Push current line first
-                if current:
-                    wrapped_lines.append(current)
-
-                # If a single word is too long, only then split it character-by-character
-                if font_obj.size(word)[0] > max_width:
-                    chunk = ""
-                    for char in word:
-                        test_chunk = chunk + char
-                        if font_obj.size(test_chunk)[0] <= max_width:
-                            chunk = test_chunk
-                        else:
-                            wrapped_lines.append(chunk)
-                            chunk = char
-                    current = chunk
-                else:
-                    current = word
+                wrapped_lines.append(current)
+                current = char
 
         wrapped_lines.append(current)
 
@@ -270,17 +224,31 @@ def get_screen_text():
     if state == STATE_MENU:
         return boot_script + buffer
 
-    if state == STATE_TYPING_CONSTRAINT:
-        return screen_text
+    if state == STATE_LOADING_CONSTRAINT:
+        return load_text
 
-    if state == STATE_TYPING_REFINEMENT:
-        return screen_text
+    if state == STATE_LOADING_REFINEMENT:
+        return load_text
 
     if state == STATE_CONSTRAINT:
-        return constraint_screen_script + buffer
+        return (
+            "MODE: CONSTRAINT CONFLICT TEST\n"
+            "\n"
+            "Purpose: pressure-test an LLM under strict instruction constraints.\n"
+            "\n"
+            "Enter a constraint to test:\n"
+            "> " + buffer
+        )
 
     if state == STATE_REFINEMENT:
-        return refinement_screen_script + buffer
+        return (
+            "MODE: PROMPT REFINEMENT\n"
+            "\n"
+            "Purpose: detect weak framing, hidden flags, and refine prompts.\n"
+            "\n"
+            "Enter a prompt for flag detection and refinement:\n"
+            "> " + buffer
+        )
 
     return buffer
 
@@ -316,21 +284,21 @@ while running:
             state = STATE_MENU
             buffer = ""
 
-    # Selected mode instruction screen auto-typing
-    elif state in [STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT]:
+    # Module loading auto-typing
+    elif state in [STATE_LOADING_CONSTRAINT, STATE_LOADING_REFINEMENT]:
         type_timer += dt
 
-        if type_timer >= type_delay_ms and screen_index < len(active_screen_script):
+        if type_timer >= type_delay_ms and load_index < len(active_load_script):
             type_timer = 0
-            char = active_screen_script[screen_index]
-            screen_text += char
-            screen_index += 1
+            char = active_load_script[load_index]
+            load_text += char
+            load_index += 1
 
             if char not in ["\n", " "]:
                 play_key_click()
 
-        if screen_index >= len(active_screen_script):
-            state = next_state_after_screen_typing
+        if load_index >= len(active_load_script):
+            state = next_state_after_load
             buffer = ""
 
     for event in pygame.event.get():
@@ -341,18 +309,18 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
 
-            # Ignore keyboard input while booting or while instructions are typing
-            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT]:
+            # Ignore keyboard input while booting or loading modules
+            if state in [STATE_BOOTING, STATE_LOADING_CONSTRAINT, STATE_LOADING_REFINEMENT]:
                 continue
 
             elif state == STATE_MENU:
                 if event.unicode == "1":
                     play_enter_click()
-                    begin_constraint_screen_typing()
+                    begin_constraint_loading()
 
                 elif event.unicode == "2":
                     play_enter_click()
-                    begin_refinement_screen_typing()
+                    begin_refinement_loading()
 
                 elif event.key == pygame.K_BACKSPACE:
                     buffer = buffer[:-1]
@@ -409,7 +377,7 @@ while running:
     cursor_x = text_x + font.size(current_line)[0] + 4
     cursor_y = y - line_height + 4
 
-    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT]:
+    if cursor_visible and state not in [STATE_BOOTING, STATE_LOADING_CONSTRAINT, STATE_LOADING_REFINEMENT]:
         pygame.draw.rect(screen, CURSOR_COLOR, (cursor_x, cursor_y, 14, 28))
 
     pygame.display.flip()

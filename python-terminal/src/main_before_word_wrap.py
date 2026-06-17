@@ -123,14 +123,13 @@ constraint_screen_script = (
     "\n"
     "Use this when you want to test whether a model can obey a narrow rule while under adversarial pressure.\n"
     "\n"
-    "CHOOSE A CONSTRAINT TEST:\n"
+    "Example constraints:\n"
+    "- Answer in exactly three words.\n"
+    "- Answer yes or no only.\n"
+    "- Do not explain your reasoning.\n"
+    "- Do not mention restricted terms.\n"
     "\n"
-    "[1] Answer in exactly three words.\n"
-    "[2] Answer yes or no only.\n"
-    "[3] Do not explain your reasoning.\n"
-    "[4] Do not mention restricted terms.\n"
-    "\n"
-    "ENTER CONSTRAINT TEST:\n"
+    "Enter a constraint to test:\n"
     "> "
 )
 
@@ -210,41 +209,16 @@ def wrap_text(text, font_obj, max_width):
     wrapped_lines = []
 
     for raw_line in text.split("\n"):
-        # Preserve blank lines
-        if raw_line == "":
-            wrapped_lines.append("")
-            continue
-
-        words = raw_line.split(" ")
         current = ""
 
-        for word in words:
-            if current == "":
-                test_line = word
-            else:
-                test_line = current + " " + word
+        for char in raw_line:
+            test_line = current + char
 
-            # If the whole word fits, keep it on the current line
             if font_obj.size(test_line)[0] <= max_width:
                 current = test_line
             else:
-                # Push current line first
-                if current:
-                    wrapped_lines.append(current)
-
-                # If a single word is too long, only then split it character-by-character
-                if font_obj.size(word)[0] > max_width:
-                    chunk = ""
-                    for char in word:
-                        test_chunk = chunk + char
-                        if font_obj.size(test_chunk)[0] <= max_width:
-                            chunk = test_chunk
-                        else:
-                            wrapped_lines.append(chunk)
-                            chunk = char
-                    current = chunk
-                else:
-                    current = word
+                wrapped_lines.append(current)
+                current = char
 
         wrapped_lines.append(current)
 

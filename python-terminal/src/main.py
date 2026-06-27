@@ -136,7 +136,7 @@ STATE_API_ENTER_OPENAI = "API_ENTER_OPENAI"
 STATE_API_ENTER_ANTHROPIC = "API_ENTER_ANTHROPIC"
 STATE_API_VIEW_PROVIDERS = "API_VIEW_PROVIDERS"
 
-state = STATE_BOOTING
+state = STATE_MENU
 
 command_ack_text = ""
 command_ack_timer = 0
@@ -254,8 +254,8 @@ idle_statuses = [
 
 idle_status_index = 0
 idle_status_timer = 0
-idle_status_text = ""
-idle_status_char_index = 0
+idle_status_text = idle_statuses[0]
+idle_status_char_index = len(idle_statuses[0])
 idle_status_char_timer = 0
 idle_status_type_delay_ms = 38
 idle_status_hold_ms = 4200
@@ -598,31 +598,14 @@ while running:
     dt = clock.tick(60)
 
     if state == STATE_MENU:
-        idle_status_char_timer += dt
+        idle_status_text = idle_statuses[idle_status_index]
+        idle_status_timer += dt
 
-        current_status = idle_statuses[idle_status_index]
-
-        # Type the current status in letter by letter
-        if idle_status_char_index < len(current_status):
-            if idle_status_char_timer >= idle_status_type_delay_ms:
-                idle_status_char_timer = 0
-                next_char = current_status[idle_status_char_index]
-                idle_status_text += next_char
-                idle_status_char_index += 1
-
-                if next_char not in [" ", "\n"]:
-                    play_loading_click()
-
-        # Hold the completed status, then shift to the next one
-        else:
-            idle_status_timer += dt
-
-            if idle_status_timer >= idle_status_hold_ms:
-                idle_status_timer = 0
-                idle_status_char_timer = 0
-                idle_status_index = (idle_status_index + 1) % len(idle_statuses)
-                idle_status_text = ""
-                idle_status_char_index = 0
+        if idle_status_timer >= idle_status_hold_ms:
+            idle_status_timer = 0
+            idle_status_index = (idle_status_index + 1) % len(idle_statuses)
+            idle_status_text = idle_statuses[idle_status_index]
+            idle_status_char_index = len(idle_status_text)
 
     cursor_timer += dt
     if cursor_timer >= 500:

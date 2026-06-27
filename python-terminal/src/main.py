@@ -153,7 +153,7 @@ command_ack_duration_ms = 850
 next_action_after_ack = None
 
 boot_script = (
-    "SPECTACULAR TERMINAL INITIALIZING...\n"
+    "SPECTACULAR TERMINAL ONLINE\n"
     "LOCAL MODE ENABLED\n"
     "SENSORY INPUT LAYER ONLINE\n"
     "FLAG DETECTION CORE STANDBY\n"

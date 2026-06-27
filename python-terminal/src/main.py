@@ -253,7 +253,7 @@ model_timer = 0
 model_delay_ms = 17
 
 stage_pause_timer = 0
-stage_pause_ms = 650
+stage_pause_ms = 550
 
 final_result_text = ""
 
@@ -591,8 +591,6 @@ def calculate_mock_scores():
 
 
 def build_model_turns_text():
-    instruction = get_combined_constraint_instruction()
-
     claude_turn_1 = build_turn_one_answer("Claude")
     gpt_turn_1 = build_turn_one_answer("GPT-4o")
 
@@ -600,18 +598,6 @@ def build_model_turns_text():
     gpt_turn_2 = build_turn_two_answer("GPT-4o")
 
     return (
-        "TURN TEST\n"
-        "\n"
-        "The generated complex question is now locked.\n"
-        "Both models will answer in two passes.\n"
-        "\n"
-        "Turn 1 forces the selected constraint.\n"
-        "Turn 2 removes the constraint and asks for justification.\n"
-        "\n"
-        "SELECTED CONSTRAINTS:\n"
-        f"{get_selected_constraint_names()}\n\n"
-        "CONSTRAINT INSTRUCTION:\n"
-        f"{instruction}\n\n"
         "CLAUDE — TURN 1\n"
         f"{claude_turn_1}\n\n"
         "GPT-4O — TURN 1\n"
@@ -673,23 +659,30 @@ def begin_complex_question_loading(question):
 def begin_model_turns_loading():
     global state, model_full_text, model_text, model_index, model_timer, model_delay_ms, stage_pause_timer
 
+    instruction = get_combined_constraint_instruction()
+
+    # Static screen context appears instantly.
+    # Only the actual model turns type in letter by letter.
+    model_text = (
+        "TURN TEST\n"
+        "\n"
+        "Generated complex question locked.\n"
+        "Turn 1 = constrained answer.\n"
+        "Turn 2 = unconstrained justification.\n"
+        "\n"
+        "SELECTED CONSTRAINTS:\n"
+        f"{get_selected_constraint_names()}\n\n"
+        "CONSTRAINT INSTRUCTION:\n"
+        f"{instruction}\n\n"
+    )
+
     model_full_text = build_model_turns_text()
-    model_text = ""
     model_index = 0
     model_timer = 0
-    model_delay_ms = 14
+    model_delay_ms = 11
     stage_pause_timer = 0
 
     state = STATE_MODEL_TURNS_LOADING
-
-# =========================================================
-# END STAGED CONSTRAINT FLOW HELPERS
-# =========================================================
-
-
-# ----------------------------
-# TEXT HELPERS
-# ----------------------------
 
 def wrap_text(text, font_obj, max_width):
     wrapped_lines = []

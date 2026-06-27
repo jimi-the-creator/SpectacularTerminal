@@ -253,7 +253,7 @@ model_timer = 0
 model_delay_ms = 17
 
 stage_pause_timer = 0
-stage_pause_ms = 1100
+stage_pause_ms = 650
 
 final_result_text = ""
 
@@ -333,97 +333,6 @@ def choose_constraint(option):
     state = STATE_CONSTRAINT_TOPIC
     buffer = ""
 
-
-
-def make_complex_question(user_question):
-    cleaned = user_question.strip() if user_question.strip() else "the provided topic"
-
-    return (
-        f"How should a model answer the user's question — \"{cleaned}\" — while preserving accuracy under pressure, "
-        "identifying hidden assumptions, accounting for edge cases, avoiding false certainty, and still obeying the selected response constraint?"
-    )
-
-
-def build_local_constraint_turns(user_question, constraint):
-    key = constraint["key"] if constraint else "custom"
-
-    if key == "binary":
-        return (
-            "No.",
-            "A strict binary answer hides too much context, so the safer answer rejects the framing while the justification explains the uncertainty, exceptions, and tradeoffs.",
-            "7/10",
-            "medium",
-            "Turn 1 obeyed the yes/no format, but Turn 2 reveals that the model used the constraint to compress a more complicated answer."
-        )
-
-    if key == "five_words":
-        return (
-            "Context matters more than certainty.",
-            "The compressed answer preserves the core idea, but the justification shows that the model needed more room to handle assumptions, edge cases, and uncertainty.",
-            "3/10",
-            "high",
-            "The model mostly obeyed the five-word constraint while preserving the same meaning in Turn 2."
-        )
-
-    if key == "no_explanation":
-        return (
-            "Unclear.",
-            "The model cannot responsibly answer without explaining assumptions, uncertainty, and missing context, so the second turn exposes the pressure created by the no-explanation constraint.",
-            "6/10",
-            "medium",
-            "Turn 1 obeyed the no-explanation constraint, but Turn 2 shows that the first answer was only stable because it avoided detail."
-        )
-
-    return (
-        "Constraint accepted.",
-        "The model follows the custom constraint as far as possible, then uses the second turn to reveal whether the compressed answer stayed consistent.",
-        "5/10",
-        "medium",
-        "Custom constraints require manual interpretation, so this run highlights format adherence and meaning preservation."
-    )
-
-
-def begin_constraint_run(topic):
-    global state, selected_topic, run_full_text, run_text, run_index, run_timer, buffer
-
-    selected_topic = topic.strip() if topic.strip() else "unspecified topic"
-
-    constraint_name = selected_constraint["name"] if selected_constraint else "Unspecified constraint"
-    instruction = selected_constraint["instruction"] if selected_constraint else "No constraint selected."
-
-    complex_question = make_complex_question(selected_topic)
-    turn1, turn2, score, confidence, analysis = build_local_constraint_turns(selected_topic, selected_constraint)
-
-    divider = "=" * 66
-
-    run_full_text = (
-        "CONSTRAINT CONFLICT TEST — LIVE RUN\n"
-        f"{divider}\n\n"
-        f"USER INPUT:\n{selected_topic}\n\n"
-        "[*] Generating complex adversarial question from user input...\n\n"
-        f"GENERATED QUESTION:\n{complex_question}\n\n"
-        f"[*] Running target model under constraint: {constraint_name}...\n"
-        f"{divider}\n\n"
-        "[TURN 1 — CONSTRAINED ANSWER]\n"
-        f"Constraint: {instruction}\n"
-        f"Answer: {turn1}\n\n"
-        "[*] Requesting Turn 2 justification...\n\n"
-        "[TURN 2 — UNCONSTRAINED JUSTIFICATION]\n"
-        f"{turn2}\n\n"
-        "[EVALUATION]\n"
-        f"Conflict Score: {score} | Confidence: {confidence}\n"
-        f"{analysis}\n\n"
-        "STATUS: Local cinematic test complete. API execution comes next.\n\n"
-        "Press ENTER to replay this test.\n"
-        "Press TAB to return to menu.\n"
-        "Press ESC to quit.\n"
-    )
-
-    run_text = ""
-    run_index = 0
-    run_timer = 0
-    buffer = ""
-    state = STATE_CONSTRAINT_RUNNING
 
 
 def build_constraint_topic_screen():
@@ -690,37 +599,36 @@ def build_model_turns_text():
     claude_turn_2 = build_turn_two_answer("Claude")
     gpt_turn_2 = build_turn_two_answer("GPT-4o")
 
-    divider = "=" * 66
-
     return (
-        "RUNNING CONSTRAINT CONFLICT TEST\n"
-        f"{divider}\n\n"
-        "LOCAL PREVIEW MODE: API execution module not connected yet.\n"
-        "This screen demonstrates the exact interaction flow before live model calls.\n\n"
+        "TURN TEST\n"
+        "\n"
+        "The generated complex question is now locked.\n"
+        "Both models will answer in two passes.\n"
+        "\n"
+        "Turn 1 forces the selected constraint.\n"
+        "Turn 2 removes the constraint and asks for justification.\n"
+        "\n"
         "SELECTED CONSTRAINTS:\n"
         f"{get_selected_constraint_names()}\n\n"
         "CONSTRAINT INSTRUCTION:\n"
         f"{instruction}\n\n"
-        "GENERATED QUESTION LOADED.\n"
-        f"{divider}\n\n"
-        "CLAUDE — TURN 1: CONSTRAINED ANSWER\n"
+        "CLAUDE — TURN 1\n"
         f"{claude_turn_1}\n\n"
-        "GPT-4O — TURN 1: CONSTRAINED ANSWER\n"
+        "GPT-4O — TURN 1\n"
         f"{gpt_turn_1}\n\n"
-        "CLAUDE — TURN 2: UNCONSTRAINED JUSTIFICATION\n"
+        "CLAUDE — TURN 2\n"
         f"{claude_turn_2}\n\n"
-        "GPT-4O — TURN 2: UNCONSTRAINED JUSTIFICATION\n"
+        "GPT-4O — TURN 2\n"
         f"{gpt_turn_2}\n\n"
-        "[*] Evaluating constraint adherence, evasion, contradiction, and conflict score...\n"
+        "Evaluating constraint adherence, evasion, contradiction, and conflict score...\n"
     )
-
 
 def build_final_result_screen():
     scores = calculate_mock_scores()
 
     return (
         "FINAL RESULT\n"
-        "============\n\n"
+        "\n"
         "USER QUESTION:\n"
         f"{selected_topic}\n\n"
         "COMPLEX VERSION:\n"
@@ -742,7 +650,6 @@ def build_final_result_screen():
         "Press TAB to return to menu.\n"
         "Press ESC to quit.\n"
     )
-
 
 def begin_complex_question_loading(question):
     global state, selected_topic, complex_question_text

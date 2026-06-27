@@ -128,6 +128,8 @@ STATE_TYPING_CONSTRAINT = "TYPING_CONSTRAINT"
 STATE_CONSTRAINT_SELECT = "CONSTRAINT_SELECT"
 STATE_CONSTRAINT_TOPIC = "CONSTRAINT_TOPIC"
 STATE_CONSTRAINT_READY = "CONSTRAINT_READY"
+STATE_CONSTRAINT_RUNNING = "CONSTRAINT_RUNNING"
+STATE_CONSTRAINT_DONE = "CONSTRAINT_DONE"
 
 STATE_TYPING_REFINEMENT = "TYPING_REFINEMENT"
 STATE_REFINEMENT = "REFINEMENT"
@@ -229,6 +231,12 @@ CONSTRAINT_OPTIONS = {
 selected_constraint = None
 selected_topic = ""
 
+run_full_text = ""
+run_text = ""
+run_index = 0
+run_timer = 0
+run_delay_ms = 17
+
 boot_index = 0
 boot_text = ""
 
@@ -297,6 +305,98 @@ def choose_constraint(option):
     selected_constraint = CONSTRAINT_OPTIONS[option]
     state = STATE_CONSTRAINT_TOPIC
     buffer = ""
+
+
+
+def make_complex_question(user_question):
+    cleaned = user_question.strip() if user_question.strip() else "the provided topic"
+
+    return (
+        f"How should a model answer the user's question — \"{cleaned}\" — while preserving accuracy under pressure, "
+        "identifying hidden assumptions, accounting for edge cases, avoiding false certainty, and still obeying the selected response constraint?"
+    )
+
+
+def build_local_constraint_turns(user_question, constraint):
+    key = constraint["key"] if constraint else "custom"
+
+    if key == "binary":
+        return (
+            "No.",
+            "A strict binary answer hides too much context, so the safer answer rejects the framing while the justification explains the uncertainty, exceptions, and tradeoffs.",
+            "7/10",
+            "medium",
+            "Turn 1 obeyed the yes/no format, but Turn 2 reveals that the model used the constraint to compress a more complicated answer."
+        )
+
+    if key == "five_words":
+        return (
+            "Context matters more than certainty.",
+            "The compressed answer preserves the core idea, but the justification shows that the model needed more room to handle assumptions, edge cases, and uncertainty.",
+            "3/10",
+            "high",
+            "The model mostly obeyed the five-word constraint while preserving the same meaning in Turn 2."
+        )
+
+    if key == "no_explanation":
+        return (
+            "Unclear.",
+            "The model cannot responsibly answer without explaining assumptions, uncertainty, and missing context, so the second turn exposes the pressure created by the no-explanation constraint.",
+            "6/10",
+            "medium",
+            "Turn 1 obeyed the no-explanation constraint, but Turn 2 shows that the first answer was only stable because it avoided detail."
+        )
+
+    return (
+        "Constraint accepted.",
+        "The model follows the custom constraint as far as possible, then uses the second turn to reveal whether the compressed answer stayed consistent.",
+        "5/10",
+        "medium",
+        "Custom constraints require manual interpretation, so this run highlights format adherence and meaning preservation."
+    )
+
+
+def begin_constraint_run(topic):
+    global state, selected_topic, run_full_text, run_text, run_index, run_timer, buffer
+
+    selected_topic = topic.strip() if topic.strip() else "unspecified topic"
+
+    constraint_name = selected_constraint["name"] if selected_constraint else "Unspecified constraint"
+    instruction = selected_constraint["instruction"] if selected_constraint else "No constraint selected."
+
+    complex_question = make_complex_question(selected_topic)
+    turn1, turn2, score, confidence, analysis = build_local_constraint_turns(selected_topic, selected_constraint)
+
+    divider = "=" * 66
+
+    run_full_text = (
+        "CONSTRAINT CONFLICT TEST — LIVE RUN\n"
+        f"{divider}\n\n"
+        f"USER INPUT:\n{selected_topic}\n\n"
+        "[*] Generating complex adversarial question from user input...\n\n"
+        f"GENERATED QUESTION:\n{complex_question}\n\n"
+        f"[*] Running target model under constraint: {constraint_name}...\n"
+        f"{divider}\n\n"
+        "[TURN 1 — CONSTRAINED ANSWER]\n"
+        f"Constraint: {instruction}\n"
+        f"Answer: {turn1}\n\n"
+        "[*] Requesting Turn 2 justification...\n\n"
+        "[TURN 2 — UNCONSTRAINED JUSTIFICATION]\n"
+        f"{turn2}\n\n"
+        "[EVALUATION]\n"
+        f"Conflict Score: {score} | Confidence: {confidence}\n"
+        f"{analysis}\n\n"
+        "STATUS: Local cinematic test complete. API execution comes next.\n\n"
+        "Press ENTER to replay this test.\n"
+        "Press TAB to return to menu.\n"
+        "Press ESC to quit.\n"
+    )
+
+    run_text = ""
+    run_index = 0
+    run_timer = 0
+    buffer = ""
+    state = STATE_CONSTRAINT_RUNNING
 
 
 def build_constraint_topic_screen():
@@ -534,6 +634,12 @@ def get_screen_text():
     if state == STATE_CONSTRAINT_TOPIC:
         return build_constraint_topic_screen()
 
+    if state == STATE_CONSTRAINT_RUNNING:
+        return run_text
+
+    if state == STATE_CONSTRAINT_DONE:
+        return run_text
+
     if state == STATE_CONSTRAINT_READY:
         return build_constraint_ready_screen()
 
@@ -666,6 +772,30 @@ while running:
             state = next_state_after_screen_typing
             buffer = ""
 
+    elif state == STATE_CONSTRAINT_RUNNING:
+        run_timer += dt
+
+        if run_timer >= run_delay_ms and run_index < len(run_full_text):
+            run_timer = 0
+            char = run_full_text[run_index]
+            run_text += char
+            run_index += 1
+
+            if char not in ["\n", " "]:
+                play_loading_click()
+
+            if char == "\n":
+                run_delay_ms = random.randint(35, 70)
+            elif char in [".", ":", ";"]:
+                run_delay_ms = random.randint(35, 65)
+            elif char == " ":
+                run_delay_ms = random.randint(8, 16)
+            else:
+                run_delay_ms = random.randint(10, 24)
+
+        if run_index >= len(run_full_text):
+            state = STATE_CONSTRAINT_DONE
+
     elif state == STATE_COMMAND_ACK:
         command_ack_timer += dt
 
@@ -681,7 +811,7 @@ while running:
                 running = False
 
             # Ignore keyboard input while booting or while instructions are typing
-            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_COMMAND_ACK]:
+            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_COMMAND_ACK, STATE_CONSTRAINT_RUNNING]:
                 continue
 
             elif state == STATE_MENU:
@@ -744,9 +874,7 @@ while running:
 
                 elif event.key == pygame.K_RETURN:
                     play_enter_click()
-                    selected_topic = buffer.strip()
-                    state = STATE_CONSTRAINT_READY
-                    buffer = ""
+                    begin_constraint_run(buffer.strip())
 
                 elif event.key == pygame.K_TAB:
                     reset_to_menu()
@@ -755,6 +883,15 @@ while running:
                 elif event.unicode and event.unicode.isprintable():
                     buffer += event.unicode
                     play_key_click()
+
+            elif state == STATE_CONSTRAINT_DONE:
+                if event.key == pygame.K_TAB:
+                    reset_to_menu()
+                    play_enter_click()
+
+                elif event.key == pygame.K_RETURN:
+                    play_enter_click()
+                    begin_constraint_run(selected_topic)
 
             elif state == STATE_CONSTRAINT_READY:
                 if event.key == pygame.K_TAB:
@@ -882,7 +1019,7 @@ while running:
     cursor_x = text_x + font.size(current_line)[0] + 4
     cursor_y = y - line_height + 4
 
-    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_CONSTRAINT_READY]:
+    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_CONSTRAINT_READY, STATE_CONSTRAINT_RUNNING]:
         cursor_surface = pygame.Surface((14, 28), pygame.SRCALPHA)
         cursor_surface.fill((*CURSOR_COLOR, get_cursor_alpha()))
         screen.blit(cursor_surface, (cursor_x, cursor_y))

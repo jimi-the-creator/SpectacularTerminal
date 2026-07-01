@@ -1,1 +1,1 @@
-Everything is in the python folders 
+Everything is in the python-terminal

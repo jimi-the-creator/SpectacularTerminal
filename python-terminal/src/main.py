@@ -128,6 +128,7 @@ STATE_TYPING_CONSTRAINT = "TYPING_CONSTRAINT"
 STATE_CONSTRAINT_SELECT = "CONSTRAINT_SELECT"
 STATE_CONSTRAINT_OVERVIEW = "CONSTRAINT_OVERVIEW"
 STATE_ADVERSARIAL_REVIEW = "ADVERSARIAL_REVIEW"
+STATE_CONSTRAINT_PICKER = "CONSTRAINT_PICKER"
 STATE_CONSTRAINT_TOPIC = "CONSTRAINT_TOPIC"
 STATE_CONSTRAINT_READY = "CONSTRAINT_READY"
 STATE_CONSTRAINT_RUNNING = "CONSTRAINT_RUNNING"
@@ -474,6 +475,51 @@ def toggle_constraint(option):
     selected_constraints.sort()
     selected_constraint = CONSTRAINT_OPTIONS[selected_constraints[0]] if selected_constraints else None
     buffer = ""
+
+
+def build_dedicated_constraint_picker_screen():
+    lines = (
+        "\n\n\n"
+        "                    SELECT CONSTRAINTS\n"
+        "                    ------------------\n"
+        "\n"
+        "        The adversarial question is locked.\n"
+        "        Now choose how Turn 1 should be restricted.\n"
+        "\n"
+        "        [1] Binary response: yes or no only\n"
+        "        [2] Five words maximum\n"
+        "        [3] No explanation allowed\n"
+        "        [4] Custom constraint\n"
+        "\n"
+    )
+
+    for key in ["1", "2", "3", "4"]:
+        marker = "X" if key in selected_constraints else " "
+        lines += f"        [{marker}] {key}: {CONSTRAINT_OPTIONS[key]['name']}\n"
+
+    lines += "\n        SELECTED:\n"
+
+    if selected_constraints:
+        for item in get_selected_constraint_objects():
+            lines += f"        [+] {item['name']}\n"
+    else:
+        lines += "        None selected.\n"
+
+    lines += "\n"
+
+    if buffer:
+        lines += f"        STATUS: {buffer}\n\n"
+
+    lines += (
+        "        Press 1-4 to toggle constraints.\n"
+        "        Press ENTER to start Turn Test.\n"
+        "        Press Q to regenerate adversarial question.\n"
+        "        Press TAB to rewrite original question.\n"
+        "\n"
+        "        > "
+    )
+
+    return lines
 
 
 def build_constraint_select_screen():
@@ -915,6 +961,9 @@ def get_screen_text():
     if state == STATE_TYPING_CONSTRAINT:
         return screen_text
 
+    if state == STATE_CONSTRAINT_PICKER:
+        return build_dedicated_constraint_picker_screen()
+
     if state == STATE_CONSTRAINT_SELECT:
         return build_constraint_select_screen()
 
@@ -1192,6 +1241,54 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
 
+            # Dedicated sequential constraint flow.
+            # This runs before the generic ignore-input block so the route cannot be skipped.
+            if state == STATE_ADVERSARIAL_REVIEW:
+                if event.key == pygame.K_RETURN:
+                    play_enter_click()
+                    selected_constraints.clear()
+                    selected_constraint = None
+                    buffer = ""
+                    state = STATE_CONSTRAINT_PICKER
+                    continue
+
+                elif event.unicode and event.unicode.lower() == "q":
+                    play_enter_click()
+                    begin_complex_question_loading(selected_topic)
+                    continue
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_CONSTRAINT_TOPIC
+                    buffer = selected_topic
+                    play_enter_click()
+                    continue
+
+            if state == STATE_CONSTRAINT_PICKER:
+                if event.unicode in CONSTRAINT_OPTIONS:
+                    toggle_constraint(event.unicode)
+                    play_enter_click()
+                    continue
+
+                elif event.key == pygame.K_RETURN:
+                    if selected_constraints:
+                        play_enter_click()
+                        begin_model_turns_loading()
+                    else:
+                        buffer = "Select at least one constraint before running the test."
+                        play_backspace_click()
+                    continue
+
+                elif event.unicode and event.unicode.lower() == "q":
+                    play_enter_click()
+                    begin_complex_question_loading(selected_topic)
+                    continue
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_CONSTRAINT_TOPIC
+                    buffer = selected_topic
+                    play_enter_click()
+                    continue
+
             # Ignore keyboard input while booting or while instructions are typing
             if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_COMMAND_ACK, STATE_CONSTRAINT_RUNNING, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING]:
                 continue
@@ -1443,7 +1540,7 @@ while running:
     cursor_x = text_x + font.size(current_line)[0] + 4
     cursor_y = y - line_height + 4
 
-    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_CONSTRAINT_READY, STATE_CONSTRAINT_RUNNING, STATE_CONSTRAINT_DONE, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING, STATE_MODEL_TURNS_PAUSE, STATE_ADVERSARIAL_REVIEW, STATE_FINAL_RESULT]:
+    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_CONSTRAINT_READY, STATE_CONSTRAINT_RUNNING, STATE_CONSTRAINT_DONE, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING, STATE_MODEL_TURNS_PAUSE, STATE_ADVERSARIAL_REVIEW, STATE_CONSTRAINT_PICKER, STATE_FINAL_RESULT]:
         cursor_surface = pygame.Surface((14, 28), pygame.SRCALPHA)
         cursor_surface.fill((*CURSOR_COLOR, get_cursor_alpha()))
         screen.blit(cursor_surface, (cursor_x, cursor_y))

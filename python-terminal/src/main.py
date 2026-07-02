@@ -143,6 +143,13 @@ def paste_into_buffer(clean_for_single_line=True):
 
 
 
+def reset_scroll_to_live():
+    global scroll_offset, scroll_locked
+    scroll_offset = 0
+    scroll_locked = False
+
+
+
 # ----------------------------
 # APP STATE
 # ----------------------------
@@ -352,6 +359,9 @@ current_type_delay_ms = type_delay_ms
 buffer = ""
 cursor_visible = True
 cursor_timer = 0
+
+scroll_offset = 0
+scroll_locked = False
 
 idle_statuses = [
     "SYSTEM IDLE...",
@@ -1482,6 +1492,54 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
 
+            # Terminal scrollback.
+            if event.key in [pygame.K_UP, pygame.K_DOWN, pygame.K_PAGEUP, pygame.K_PAGEDOWN, pygame.K_HOME, pygame.K_END]:
+                full_text_for_scroll = get_screen_text()
+                wrapped_for_scroll = wrap_text(
+                    full_text_for_scroll,
+                    font,
+                    TERMINAL_RECT.width - (PADDING_X * 2)
+                )
+                line_height_for_scroll = 36
+                max_visible_for_scroll = (TERMINAL_RECT.height - (PADDING_Y * 2)) // line_height_for_scroll
+                max_scroll = max(0, len(wrapped_for_scroll) - max_visible_for_scroll)
+
+                if event.key == pygame.K_UP:
+                    scroll_offset = min(max_scroll, scroll_offset + 1)
+                    scroll_locked = scroll_offset > 0
+                    play_key_click()
+                    continue
+
+                elif event.key == pygame.K_DOWN:
+                    scroll_offset = max(0, scroll_offset - 1)
+                    scroll_locked = scroll_offset > 0
+                    play_key_click()
+                    continue
+
+                elif event.key == pygame.K_PAGEUP:
+                    scroll_offset = min(max_scroll, scroll_offset + max_visible_for_scroll)
+                    scroll_locked = scroll_offset > 0
+                    play_key_click()
+                    continue
+
+                elif event.key == pygame.K_PAGEDOWN:
+                    scroll_offset = max(0, scroll_offset - max_visible_for_scroll)
+                    scroll_locked = scroll_offset > 0
+                    play_key_click()
+                    continue
+
+                elif event.key == pygame.K_HOME:
+                    scroll_offset = max_scroll
+                    scroll_locked = scroll_offset > 0
+                    play_key_click()
+                    continue
+
+                elif event.key == pygame.K_END:
+                    scroll_offset = 0
+                    scroll_locked = False
+                    play_key_click()
+                    continue
+
             # Paste support: Cmd+V on macOS, Ctrl+V on Windows/Linux.
             mods = pygame.key.get_mods()
             paste_pressed = event.key == pygame.K_v and (mods & pygame.KMOD_META or mods & pygame.KMOD_CTRL)
@@ -1496,6 +1554,7 @@ while running:
                 ]:
                     single_line = state != STATE_REFINEMENT
                     paste_into_buffer(clean_for_single_line=single_line)
+                    reset_scroll_to_live()
                     continue
 
             # Dedicated sequential constraint flow.
@@ -1873,7 +1932,15 @@ while running:
 
     line_height = 36
     max_visible_lines = (TERMINAL_RECT.height - (PADDING_Y * 2)) // line_height
-    visible_lines = lines[-max_visible_lines:]
+    max_scroll = max(0, len(lines) - max_visible_lines)
+    scroll_offset = max(0, min(scroll_offset, max_scroll))
+
+    if scroll_offset > 0:
+        end_index = len(lines) - scroll_offset
+        start_index = max(0, end_index - max_visible_lines)
+        visible_lines = lines[start_index:end_index]
+    else:
+        visible_lines = lines[-max_visible_lines:]
 
     y = text_y
 
@@ -1889,6 +1956,12 @@ while running:
         cursor_surface = pygame.Surface((14, 28), pygame.SRCALPHA)
         cursor_surface.fill((*CURSOR_COLOR, get_cursor_alpha()))
         screen.blit(cursor_surface, (cursor_x, cursor_y))
+
+    if scroll_offset > 0:
+        indicator = f"SCROLLBACK: {scroll_offset} LINE(S) ABOVE LIVE  |  END = LIVE"
+        indicator_surface = font.render(indicator, True, TEXT_COLOR)
+        indicator_surface.set_alpha(170)
+        screen.blit(indicator_surface, (TERMINAL_RECT.x + PADDING_X, TERMINAL_RECT.bottom - 34))
 
     pygame.display.flip()
 

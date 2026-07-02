@@ -777,17 +777,21 @@ def build_model_turns_text():
         "Turn 1 = constrained answer.\n"
         "Turn 2 = unconstrained justification.\n"
         "\n"
-        f"{model_a.upper()} — TURN 1\n"
+        f"MODEL A — {model_a.upper()} — TURN 1\n"
+        "Constrained Answer:\n"
         f"{claude_turn_1_text}\n\n"
-        f"{model_b.upper()} — TURN 1\n"
+        f"MODEL B — {model_b.upper()} — TURN 1\n"
+        "Constrained Answer:\n"
         f"{gpt_turn_1_text}\n\n"
     )
 
     if turn_phase >= 2 or claude_turn_2_text or gpt_turn_2_text:
         text += (
-            f"{model_a.upper()} — TURN 2\n"
+            f"MODEL A — {model_a.upper()} — TURN 2 JUSTIFICATION\n"
+            f"Justification from Model A ({model_a}):\n"
             f"{claude_turn_2_text}\n\n"
-            f"{model_b.upper()} — TURN 2\n"
+            f"MODEL B — {model_b.upper()} — TURN 2 JUSTIFICATION\n"
+            f"Justification from Model B ({model_b}):\n"
             f"{gpt_turn_2_text}\n\n"
         )
 

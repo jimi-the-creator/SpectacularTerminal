@@ -253,6 +253,19 @@ model_index = 0
 model_timer = 0
 model_delay_ms = 17
 
+claude_turn_1_full = ""
+gpt_turn_1_full = ""
+claude_turn_2_full = ""
+gpt_turn_2_full = ""
+claude_turn_1_text = ""
+gpt_turn_1_text = ""
+claude_turn_2_text = ""
+gpt_turn_2_text = ""
+turn_phase = 1
+turn_phase_pause_timer = 0
+turn_phase_pause_ms = 650
+turn_waiting_between_phases = False
+
 stage_pause_timer = 0
 stage_pause_ms = 550
 
@@ -603,23 +616,32 @@ def calculate_mock_scores():
 
 
 def build_model_turns_text():
-    claude_turn_1 = build_turn_one_answer("Claude")
-    gpt_turn_1 = build_turn_one_answer("GPT-4o")
-
-    claude_turn_2 = build_turn_two_answer("Claude")
-    gpt_turn_2 = build_turn_two_answer("GPT-4o")
-
-    return (
+    text = (
+        "TURN TEST\n"
+        "\n"
+        "QUESTION UNDER TEST:\n"
+        f"{complex_question_text}\n\n"
+        "Turn 1 = constrained answer.\n"
+        "Turn 2 = unconstrained justification.\n"
+        "\n"
         "CLAUDE — TURN 1\n"
-        f"{claude_turn_1}\n\n"
+        f"{claude_turn_1_text}\n\n"
         "GPT-4O — TURN 1\n"
-        f"{gpt_turn_1}\n\n"
-        "CLAUDE — TURN 2\n"
-        f"{claude_turn_2}\n\n"
-        "GPT-4O — TURN 2\n"
-        f"{gpt_turn_2}\n\n"
-        "Turn test complete. Press ENTER to view final result.\n"
+        f"{gpt_turn_1_text}\n\n"
     )
+
+    if turn_phase >= 2 or claude_turn_2_text or gpt_turn_2_text:
+        text += (
+            "CLAUDE — TURN 2\n"
+            f"{claude_turn_2_text}\n\n"
+            "GPT-4O — TURN 2\n"
+            f"{gpt_turn_2_text}\n\n"
+        )
+
+    if state == STATE_MODEL_TURNS_PAUSE:
+        text += "Turn test complete. Press ENTER to view final result.\n"
+
+    return text
 
 def build_final_result_screen():
     scores = calculate_mock_scores()
@@ -677,27 +699,32 @@ def begin_complex_question_loading(question):
 
 def begin_model_turns_loading():
     global state, model_full_text, model_text, model_index, model_timer, model_delay_ms, stage_pause_timer
+    global claude_turn_1_full, gpt_turn_1_full, claude_turn_2_full, gpt_turn_2_full
+    global claude_turn_1_text, gpt_turn_1_text, claude_turn_2_text, gpt_turn_2_text
+    global turn_phase, turn_phase_pause_timer, turn_waiting_between_phases
 
-    # New screen: question at top appears instantly.
-    # Only the actual model turns load letter by letter.
-    model_text = (
-        "TURN TEST\n"
-        "\n"
-        "QUESTION UNDER TEST:\n"
-        f"{complex_question_text}\n\n"
-        "Turn 1 = constrained answer.\n"
-        "Turn 2 = unconstrained justification.\n"
-        "\n"
-    )
+    claude_turn_1_full = build_turn_one_answer("Claude")
+    gpt_turn_1_full = build_turn_one_answer("GPT-4o")
+    claude_turn_2_full = build_turn_two_answer("Claude")
+    gpt_turn_2_full = build_turn_two_answer("GPT-4o")
 
-    model_full_text = build_model_turns_text()
+    claude_turn_1_text = ""
+    gpt_turn_1_text = ""
+    claude_turn_2_text = ""
+    gpt_turn_2_text = ""
+
+    turn_phase = 1
+    turn_phase_pause_timer = 0
+    turn_waiting_between_phases = False
+
+    model_full_text = ""
+    model_text = build_model_turns_text()
     model_index = 0
     model_timer = 0
-    model_delay_ms = 11
+    model_delay_ms = 13
     stage_pause_timer = 0
 
     state = STATE_MODEL_TURNS_LOADING
-
 
 def save_constraint_report():
     global last_report_path, report_status_text
@@ -1103,28 +1130,48 @@ while running:
     elif state == STATE_MODEL_TURNS_LOADING:
         model_timer += dt
 
-        if model_timer >= model_delay_ms and model_index < len(model_full_text):
-            model_timer = 0
-            char = model_full_text[model_index]
-            model_text += char
-            model_index += 1
+        if turn_waiting_between_phases:
+            turn_phase_pause_timer += dt
 
-            if char not in ["\n", " "]:
+            if turn_phase_pause_timer >= turn_phase_pause_ms:
+                turn_waiting_between_phases = False
+                play_enter_click()
+
+        elif model_timer >= model_delay_ms:
+            model_timer = 0
+
+            if turn_phase == 1:
+                if len(claude_turn_1_text) < len(claude_turn_1_full):
+                    claude_turn_1_text += claude_turn_1_full[len(claude_turn_1_text)]
+
+                if len(gpt_turn_1_text) < len(gpt_turn_1_full):
+                    gpt_turn_1_text += gpt_turn_1_full[len(gpt_turn_1_text)]
+
+                if len(claude_turn_1_text) >= len(claude_turn_1_full) and len(gpt_turn_1_text) >= len(gpt_turn_1_full):
+                    turn_phase = 2
+                    turn_waiting_between_phases = True
+                    turn_phase_pause_timer = 0
+
+            elif turn_phase == 2:
+                if len(claude_turn_2_text) < len(claude_turn_2_full):
+                    claude_turn_2_text += claude_turn_2_full[len(claude_turn_2_text)]
+
+                if len(gpt_turn_2_text) < len(gpt_turn_2_full):
+                    gpt_turn_2_text += gpt_turn_2_full[len(gpt_turn_2_text)]
+
+                if len(claude_turn_2_text) >= len(claude_turn_2_full) and len(gpt_turn_2_text) >= len(gpt_turn_2_full):
+                    state = STATE_MODEL_TURNS_PAUSE
+                    play_enter_click()
+
+            model_text = build_model_turns_text()
+
+            if random.random() < 0.85:
                 play_loading_click()
 
-            if char == "\n":
-                model_delay_ms = random.randint(30, 65)
-            elif char in [".", ":", ";", ","]:
-                model_delay_ms = random.randint(25, 50)
-            elif char == " ":
-                model_delay_ms = random.randint(7, 14)
+            if random.random() < 0.2:
+                model_delay_ms = random.randint(18, 34)
             else:
-                model_delay_ms = random.randint(9, 22)
-
-        if model_index >= len(model_full_text):
-            state = STATE_MODEL_TURNS_PAUSE
-            stage_pause_timer = 0
-            play_enter_click()
+                model_delay_ms = random.randint(8, 16)
 
     elif state == STATE_MODEL_TURNS_PAUSE:
         pass

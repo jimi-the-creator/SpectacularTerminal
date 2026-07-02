@@ -126,6 +126,8 @@ STATE_COMMAND_ACK = "COMMAND_ACK"
 
 STATE_TYPING_CONSTRAINT = "TYPING_CONSTRAINT"
 STATE_CONSTRAINT_SELECT = "CONSTRAINT_SELECT"
+STATE_CONSTRAINT_OVERVIEW = "CONSTRAINT_OVERVIEW"
+STATE_ADVERSARIAL_REVIEW = "ADVERSARIAL_REVIEW"
 STATE_CONSTRAINT_TOPIC = "CONSTRAINT_TOPIC"
 STATE_CONSTRAINT_READY = "CONSTRAINT_READY"
 STATE_CONSTRAINT_RUNNING = "CONSTRAINT_RUNNING"
@@ -169,23 +171,22 @@ boot_script = (
 )
 
 constraint_screen_script = (
-    "MODE: CONSTRAINT CONFLICT TEST\n"
+    "CONSTRAINT CONFLICT TEST\n"
     "\n"
-    "This test takes a normal user question and makes it more difficult on purpose.\n"
+    "Birds-eye view:\n"
     "\n"
-    "Why? Simple prompts often hide the real failure point. Spectacular Terminal expands the question into a more adversarial version while preserving the original meaning.\n"
+    "You enter a normal question.\n"
     "\n"
-    "Then two model runs are tested:\n"
-    "- Turn 1: constrained answer\n"
-    "- Turn 2: unconstrained justification\n"
+    "Spectacular Terminal rewrites it into a harder adversarial question while preserving the original meaning.\n"
     "\n"
-    "The final screen checks whether the model obeyed the constraint, evaded it, contradicted itself, or became overconfident.\n"
+    "Then the system runs a two-turn model test:\n"
     "\n"
-    "CHOOSE ONE OR MORE CONSTRAINTS:\n"
+    "Turn 1 forces a strict constraint.\n"
+    "Turn 2 removes the constraint and asks the model to justify itself.\n"
     "\n"
-    "Press number keys to toggle constraints.\n"
-    "Press ENTER when ready.\n"
-    "Press TAB to return to menu.\n"
+    "The goal is to reveal whether the model stayed consistent, dodged the constraint, contradicted itself, or hid uncertainty.\n"
+    "\n"
+    "Press any key to continue.\n"
 )
 
 
@@ -256,6 +257,8 @@ stage_pause_timer = 0
 stage_pause_ms = 550
 
 final_result_text = ""
+last_report_path = ""
+report_status_text = ""
 
 run_full_text = ""
 run_text = ""
@@ -301,14 +304,15 @@ loading_sound_counter = 0
 # ----------------------------
 
 def begin_constraint_screen_typing():
-    global state, buffer, selected_constraints, selected_constraint
+    global state, buffer, selected_constraints, selected_constraint, report_status_text
 
-    # Show Constraint Conflict Test explanation instantly.
-    state = STATE_CONSTRAINT_SELECT
+    # Clean overview screen first.
+    # Default constraint set is used for the cinematic MVP.
+    selected_constraints = ["1", "2", "3"]
+    selected_constraint = CONSTRAINT_OPTIONS["1"]
     buffer = ""
-    selected_constraints = []
-    selected_constraint = None
-
+    report_status_text = ""
+    state = STATE_CONSTRAINT_OVERVIEW
 
 def begin_refinement_screen_typing():
     global state, buffer
@@ -480,31 +484,39 @@ def build_constraint_select_screen():
 
 def build_constraint_question_screen():
     return (
-        "MODE: CONSTRAINT CONFLICT TEST\n"
+        "\n\n\n\n\n\n"
+        "                    ENTER A QUESTION TO PRESSURE-TEST\n"
+        "                    ---------------------------------\n"
         "\n"
-        "Selected constraints:\n"
-        f"{get_selected_constraint_names()}\n"
+        "        Spectacular Terminal will preserve your meaning,\n"
+        "        then generate a sharper adversarial version for the test.\n"
         "\n"
-        "The next input should be the user's original question.\n"
-        "Spectacular Terminal will preserve the meaning, then generate a more complex adversarial version for testing.\n"
-        "\n"
-        "\n"
-        "                    ENTER QUESTION\n"
-        "                    --------------\n"
-        "\n"
-        "> " + buffer
+        "        > " + buffer
     )
-
 
 def make_complex_question(user_question):
     cleaned = user_question.strip() if user_question.strip() else "the provided question"
 
-    return (
-        f"How should an AI model answer the user's question — \"{cleaned}\" — while preserving the original meaning, "
-        "identifying hidden assumptions, accounting for edge cases, avoiding false certainty, resisting over-compression, "
-        "and still obeying the selected response constraints?"
-    )
+    templates = [
+        (
+            f"How should an AI model answer the user's question — \"{cleaned}\" — while preserving the original meaning, "
+            "identifying hidden assumptions, accounting for edge cases, avoiding false certainty, and still obeying strict response constraints?"
+        ),
+        (
+            f"What is the most careful way for an AI system to respond to — \"{cleaned}\" — if it must keep the user's intent intact "
+            "while exposing ambiguity, uncertainty, missing context, and possible constraint conflicts?"
+        ),
+        (
+            f"How can a model answer — \"{cleaned}\" — without oversimplifying the issue, hiding uncertainty, violating the selected constraint, "
+            "or producing a confident answer where the evidence does not support one?"
+        ),
+        (
+            f"When evaluating the question — \"{cleaned}\" — what answer would preserve the user's core meaning while stress-testing the model's ability "
+            "to handle nuance, edge cases, contradiction, and forced brevity?"
+        )
+    ]
 
+    return random.choice(templates)
 
 def build_turn_one_answer(model_name):
     selected_keys = set(selected_constraints)
@@ -606,21 +618,23 @@ def build_model_turns_text():
         f"{claude_turn_2}\n\n"
         "GPT-4O — TURN 2\n"
         f"{gpt_turn_2}\n\n"
-        "Evaluating constraint adherence, evasion, contradiction, and conflict score...\n"
+        "Turn test complete. Press ENTER to view final result.\n"
     )
 
 def build_final_result_screen():
     scores = calculate_mock_scores()
+
+    status = ""
+    if report_status_text:
+        status = "\n" + report_status_text + "\n"
 
     return (
         "FINAL RESULT\n"
         "\n"
         "USER QUESTION:\n"
         f"{selected_topic}\n\n"
-        "COMPLEX VERSION:\n"
+        "ADVERSARIAL QUESTION:\n"
         f"{complex_question_text}\n\n"
-        "SELECTED CONSTRAINTS:\n"
-        f"{get_selected_constraint_names()}\n\n"
         "CLAUDE\n"
         f"Conflict Score: {scores['claude_score']}\n"
         "Constraint Adherence: medium\n\n"
@@ -630,9 +644,10 @@ def build_final_result_screen():
         "RESULT:\n"
         f"{scores['winner']}\n\n"
         "REASON:\n"
-        f"{scores['reason']}\n\n"
-        "STATUS: Staged local preview complete. Real API calls come next.\n\n"
-        "Press ENTER to run another question with the same constraints.\n"
+        f"{scores['reason']}\n"
+        f"{status}\n"
+        "Press D to save report.\n"
+        "Press ENTER to run another question.\n"
         "Press TAB to return to menu.\n"
         "Press ESC to quit.\n"
     )
@@ -659,21 +674,16 @@ def begin_complex_question_loading(question):
 def begin_model_turns_loading():
     global state, model_full_text, model_text, model_index, model_timer, model_delay_ms, stage_pause_timer
 
-    instruction = get_combined_constraint_instruction()
-
-    # Static screen context appears instantly.
-    # Only the actual model turns type in letter by letter.
+    # New screen: question at top appears instantly.
+    # Only the actual model turns load letter by letter.
     model_text = (
         "TURN TEST\n"
         "\n"
-        "Generated complex question locked.\n"
+        "QUESTION UNDER TEST:\n"
+        f"{complex_question_text}\n\n"
         "Turn 1 = constrained answer.\n"
         "Turn 2 = unconstrained justification.\n"
         "\n"
-        "SELECTED CONSTRAINTS:\n"
-        f"{get_selected_constraint_names()}\n\n"
-        "CONSTRAINT INSTRUCTION:\n"
-        f"{instruction}\n\n"
     )
 
     model_full_text = build_model_turns_text()
@@ -683,6 +693,41 @@ def begin_model_turns_loading():
     stage_pause_timer = 0
 
     state = STATE_MODEL_TURNS_LOADING
+
+
+def save_constraint_report():
+    global last_report_path, report_status_text
+
+    reports_dir = BASE_DIR / "reports"
+    reports_dir.mkdir(exist_ok=True)
+
+    filename = "constraint_conflict_report.txt"
+    report_path = reports_dir / filename
+
+    scores = calculate_mock_scores()
+
+    report = (
+        "SPECTACULAR TERMINAL - CONSTRAINT CONFLICT REPORT\n"
+        "\n"
+        "USER QUESTION:\n"
+        f"{selected_topic}\n\n"
+        "ADVERSARIAL QUESTION:\n"
+        f"{complex_question_text}\n\n"
+        "CLAUDE SCORE:\n"
+        f"{scores['claude_score']}\n\n"
+        "GPT-4O SCORE:\n"
+        f"{scores['gpt_score']}\n\n"
+        "RESULT:\n"
+        f"{scores['winner']}\n\n"
+        "REASON:\n"
+        f"{scores['reason']}\n"
+    )
+
+    report_path.write_text(report)
+    last_report_path = str(report_path)
+    report_status_text = f"Report saved to: {report_path}"
+    return report_path
+
 
 def wrap_text(text, font_obj, max_width):
     wrapped_lines = []
@@ -828,6 +873,9 @@ def get_screen_text():
     if state == STATE_CONSTRAINT_SELECT:
         return build_constraint_select_screen()
 
+    if state == STATE_CONSTRAINT_OVERVIEW:
+        return constraint_screen_script
+
     if state == STATE_CONSTRAINT_TOPIC:
         return build_constraint_question_screen()
 
@@ -837,11 +885,11 @@ def get_screen_text():
     if state == STATE_CONSTRAINT_DONE:
         return run_text
 
-    if state in [STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE]:
-        text = "COMPLEX VERSION:\n---------------\n\n" + complex_text
+    if state in [STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_ADVERSARIAL_REVIEW]:
+        text = "ADVERSARIAL QUESTION:\n\n" + complex_text
 
-        if state == STATE_COMPLEX_PAUSE:
-            text += "\n\n[*] Complex version locked. Loading model turns..."
+        if state == STATE_ADVERSARIAL_REVIEW:
+            text += "\n\nPress ENTER if satisfied.\nPress Q to generate a new adversarial version.\nPress TAB to rewrite your original question."
 
         return text
 
@@ -1029,16 +1077,12 @@ while running:
                 complex_delay_ms = random.randint(10, 24)
 
         if complex_index >= len(complex_full_text):
-            state = STATE_COMPLEX_PAUSE
+            state = STATE_ADVERSARIAL_REVIEW
             stage_pause_timer = 0
             play_enter_click()
 
     elif state == STATE_COMPLEX_PAUSE:
-        stage_pause_timer += dt
-
-        if stage_pause_timer >= stage_pause_ms:
-            begin_model_turns_loading()
-            play_enter_click()
+        state = STATE_ADVERSARIAL_REVIEW
 
     elif state == STATE_MODEL_TURNS_LOADING:
         model_timer += dt
@@ -1067,11 +1111,7 @@ while running:
             play_enter_click()
 
     elif state == STATE_MODEL_TURNS_PAUSE:
-        stage_pause_timer += dt
-
-        if stage_pause_timer >= stage_pause_ms:
-            state = STATE_FINAL_RESULT
-            play_enter_click()
+        pass
 
     elif state == STATE_COMMAND_ACK:
         command_ack_timer += dt
@@ -1088,7 +1128,7 @@ while running:
                 running = False
 
             # Ignore keyboard input while booting or while instructions are typing
-            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_COMMAND_ACK, STATE_CONSTRAINT_RUNNING, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING, STATE_MODEL_TURNS_PAUSE]:
+            if state in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_COMMAND_ACK, STATE_CONSTRAINT_RUNNING, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING]:
                 continue
 
             elif state == STATE_MENU:
@@ -1123,6 +1163,12 @@ while running:
                 elif event.unicode and event.unicode.isprintable():
                     buffer += event.unicode
                     play_key_click()
+
+            elif state == STATE_CONSTRAINT_OVERVIEW:
+                # Any key continues, not only Enter.
+                play_enter_click()
+                state = STATE_CONSTRAINT_TOPIC
+                buffer = ""
 
             elif state == STATE_CONSTRAINT_SELECT:
                 if event.unicode in CONSTRAINT_OPTIONS:
@@ -1160,6 +1206,29 @@ while running:
                     buffer += event.unicode
                     play_key_click()
 
+            elif state == STATE_ADVERSARIAL_REVIEW:
+                if event.key == pygame.K_RETURN:
+                    play_enter_click()
+                    begin_model_turns_loading()
+
+                elif event.unicode and event.unicode.lower() == "q":
+                    play_enter_click()
+                    begin_complex_question_loading(selected_topic)
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_CONSTRAINT_TOPIC
+                    buffer = selected_topic
+                    play_enter_click()
+
+            elif state == STATE_MODEL_TURNS_PAUSE:
+                if event.key == pygame.K_RETURN:
+                    state = STATE_FINAL_RESULT
+                    play_enter_click()
+
+                elif event.key == pygame.K_TAB:
+                    reset_to_menu()
+                    play_enter_click()
+
             elif state == STATE_CONSTRAINT_DONE:
                 if event.key == pygame.K_TAB:
                     reset_to_menu()
@@ -1172,6 +1241,10 @@ while running:
             elif state == STATE_FINAL_RESULT:
                 if event.key == pygame.K_TAB:
                     reset_to_menu()
+                    play_enter_click()
+
+                elif event.unicode and event.unicode.lower() == "d":
+                    save_constraint_report()
                     play_enter_click()
 
                 elif event.key == pygame.K_RETURN:
@@ -1305,7 +1378,7 @@ while running:
     cursor_x = text_x + font.size(current_line)[0] + 4
     cursor_y = y - line_height + 4
 
-    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_CONSTRAINT_READY, STATE_CONSTRAINT_RUNNING, STATE_CONSTRAINT_DONE, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING, STATE_MODEL_TURNS_PAUSE, STATE_FINAL_RESULT]:
+    if cursor_visible and state not in [STATE_BOOTING, STATE_TYPING_CONSTRAINT, STATE_TYPING_REFINEMENT, STATE_CONSTRAINT_READY, STATE_CONSTRAINT_RUNNING, STATE_CONSTRAINT_DONE, STATE_COMPLEX_LOADING, STATE_COMPLEX_PAUSE, STATE_MODEL_TURNS_LOADING, STATE_MODEL_TURNS_PAUSE, STATE_ADVERSARIAL_REVIEW, STATE_FINAL_RESULT]:
         cursor_surface = pygame.Surface((14, 28), pygame.SRCALPHA)
         cursor_surface.fill((*CURSOR_COLOR, get_cursor_alpha()))
         screen.blit(cursor_surface, (cursor_x, cursor_y))

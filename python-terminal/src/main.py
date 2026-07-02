@@ -147,6 +147,10 @@ STATE_API_SETTINGS = "API_SETTINGS"
 STATE_API_ENTER_OPENAI = "API_ENTER_OPENAI"
 STATE_API_ENTER_ANTHROPIC = "API_ENTER_ANTHROPIC"
 STATE_API_VIEW_PROVIDERS = "API_VIEW_PROVIDERS"
+STATE_API_SELECT_GENERATOR = "API_SELECT_GENERATOR"
+STATE_API_SELECT_MODEL_A = "API_SELECT_MODEL_A"
+STATE_API_SELECT_MODEL_B = "API_SELECT_MODEL_B"
+STATE_API_SELECT_JUDGE = "API_SELECT_JUDGE"
 STATE_API_SELECT_MODEL_A = "API_SELECT_MODEL_A"
 STATE_API_SELECT_MODEL_B = "API_SELECT_MODEL_B"
 
@@ -258,8 +262,10 @@ SELECTABLE_MODELS = {
     },
 }
 
+selected_generator_key = "1"
 selected_model_a_key = "2"
 selected_model_b_key = "1"
+selected_judge_key = "2"
 
 selected_constraint = None
 selected_topic = ""
@@ -713,6 +719,7 @@ def build_final_result_screen():
     scores = calculate_mock_scores()
     model_a = get_selected_model_label("A")
     model_b = get_selected_model_label("B")
+    judge = get_selected_model_label("JUDGE")
 
     status = ""
     if report_status_text:
@@ -720,6 +727,8 @@ def build_final_result_screen():
 
     return (
         "FINAL RESULT\n"
+        "\n"
+        f"Judge: {judge}\n"
         "\n"
         "USER QUESTION:\n"
         f"{selected_topic}\n\n"
@@ -736,9 +745,9 @@ def build_final_result_screen():
         "REASON:\n"
         f"{scores['reason']}\n\n"
         "IN PLAIN ENGLISH:\n"
-        "The first answer was forced into a tight format.\n"
-        "The second answer reveals what the model had to hide, compress, or explain later.\n"
-        "A higher score means more pressure or inconsistency between Turn 1 and Turn 2.\n"
+        "The judge compares the gap between Turn 1 and Turn 2.\n"
+        "A smaller gap means the model stayed more consistent under pressure.\n"
+        "A higher score means more compression, evasion, contradiction, or hidden nuance.\n"
         f"{status}\n"
         "Press D to save report.\n"
         "Press ENTER to run another question.\n"
@@ -809,22 +818,25 @@ def save_constraint_report():
     report_path = reports_dir / filename
 
     scores = calculate_mock_scores()
+    generator = get_selected_model_label("GENERATOR")
     model_a = get_selected_model_label("A")
     model_b = get_selected_model_label("B")
+    judge = get_selected_model_label("JUDGE")
 
     layman_summary = (
-        "In plain English, this test checks whether the AI can stay honest and consistent when it is forced to answer under pressure. "
-        "The first answer is intentionally restricted, which can make the model hide nuance or oversimplify. "
-        "The second answer removes the restriction and reveals what the model actually needed to explain. "
-        "If Turn 2 adds major qualifications or changes the meaning of Turn 1, the conflict score goes up."
+        "In plain English, this test checks whether an AI can stay honest and consistent when forced to answer under pressure. "
+        "Turn 1 is restricted. Turn 2 removes the restriction. The judge compares the gap between those two answers. "
+        "If Turn 2 changes, corrects, or heavily qualifies Turn 1, the conflict score goes up."
     )
 
     report = (
         "SPECTACULAR TERMINAL - CONSTRAINT CONFLICT REPORT\n"
         "\n"
-        "MODEL COMPARISON:\n"
-        f"Model A: {get_selected_model_display('A')}\n"
-        f"Model B: {get_selected_model_display('B')}\n\n"
+        "AI ROLES:\n"
+        f"Question Generator: {generator}\n"
+        f"Model A: {model_a}\n"
+        f"Model B: {model_b}\n"
+        f"Judge: {judge}\n\n"
         "USER QUESTION:\n"
         f"{selected_topic}\n\n"
         "ADVERSARIAL QUESTION:\n"
@@ -839,9 +851,9 @@ def save_constraint_report():
         f"{scores['claude_score']}\n\n"
         f"{model_b.upper()} SCORE:\n"
         f"{scores['gpt_score']}\n\n"
-        "RESULT:\n"
+        "JUDGE RESULT:\n"
         f"{scores['winner']}\n\n"
-        "REASON:\n"
+        "JUDGE REASON:\n"
         f"{scores['reason']}\n"
     )
 
@@ -914,39 +926,66 @@ def mask_key(value):
 
 
 
-def get_selected_model_label(slot):
-    key = selected_model_a_key if slot == "A" else selected_model_b_key
+def get_role_key(role):
+    if role == "GENERATOR":
+        return selected_generator_key
+    if role == "A":
+        return selected_model_a_key
+    if role == "B":
+        return selected_model_b_key
+    if role == "JUDGE":
+        return selected_judge_key
+
+    return "1"
+
+
+def get_selected_model_label(role):
+    key = get_role_key(role)
     return SELECTABLE_MODELS.get(key, SELECTABLE_MODELS["1"])["label"]
 
 
-def get_selected_model_display(slot):
-    key = selected_model_a_key if slot == "A" else selected_model_b_key
+def get_selected_model_display(role):
+    key = get_role_key(role)
     return SELECTABLE_MODELS.get(key, SELECTABLE_MODELS["1"])["display"]
 
 
-def get_selected_model_provider(slot):
-    key = selected_model_a_key if slot == "A" else selected_model_b_key
+def get_selected_model_provider(role):
+    key = get_role_key(role)
     return SELECTABLE_MODELS.get(key, SELECTABLE_MODELS["1"])["provider"]
 
 
-def build_model_selector_screen(slot):
-    current = get_selected_model_display(slot)
+def role_title(role):
+    if role == "GENERATOR":
+        return "QUESTION GENERATOR"
+    if role == "A":
+        return "MODEL A"
+    if role == "B":
+        return "MODEL B"
+    if role == "JUDGE":
+        return "JUDGE"
+
+    return role
+
+
+def build_model_selector_screen(role):
+    current = get_selected_model_display(role)
 
     text = (
-        f"SELECT MODEL {slot}\n"
+        f"SELECT {role_title(role)}\n"
         "\n"
-        f"Current Model {slot}: {current}\n"
-        "\n"
-        "Choose which AI should be used in the two-model comparison.\n"
+        f"Current {role_title(role)}: {current}\n"
         "\n"
     )
 
-    for key, model in SELECTABLE_MODELS.items():
-        marker = "X" if (
-            (slot == "A" and key == selected_model_a_key) or
-            (slot == "B" and key == selected_model_b_key)
-        ) else " "
+    if role == "GENERATOR":
+        text += "This AI rewrites the user's question into a harder adversarial version.\n\n"
+    elif role in ["A", "B"]:
+        text += "This AI answers Turn 1 under constraint, then Turn 2 with justification.\n\n"
+    elif role == "JUDGE":
+        text += "This AI compares the gap between Turn 1 and Turn 2 and decides which model handled pressure better.\n\n"
 
+    for key, model in SELECTABLE_MODELS.items():
+        marker = "X" if key == get_role_key(role) else " "
         status = "CONFIGURED" if provider_configured(model["provider"]) else "NO API KEY"
         text += f"[{marker}] {key}: {model['display']}  ({status})\n"
 
@@ -961,17 +1000,21 @@ def build_model_selector_screen(slot):
     return text
 
 
-def set_selected_model(slot, key):
-    global selected_model_a_key, selected_model_b_key, buffer
+def set_selected_model(role, key):
+    global selected_generator_key, selected_model_a_key, selected_model_b_key, selected_judge_key, buffer
 
     if key not in SELECTABLE_MODELS:
         buffer = "Invalid model selection."
         return
 
-    if slot == "A":
+    if role == "GENERATOR":
+        selected_generator_key = key
+    elif role == "A":
         selected_model_a_key = key
-    else:
+    elif role == "B":
         selected_model_b_key = key
+    elif role == "JUDGE":
+        selected_judge_key = key
 
     buffer = ""
 
@@ -990,15 +1033,19 @@ def build_api_settings_screen():
         f"OpenAI: {openai_status}\n"
         f"Anthropic: {anthropic_status}\n"
         "\n"
-        "ACTIVE COMPARISON MODELS:\n"
+        "ACTIVE AI ROLES:\n"
+        f"Question Generator: {get_selected_model_display('GENERATOR')}\n"
         f"Model A: {get_selected_model_display('A')}\n"
         f"Model B: {get_selected_model_display('B')}\n"
+        f"Judge: {get_selected_model_display('JUDGE')}\n"
         "\n"
         "[1] Enter OpenAI API Key\n"
         "[2] Enter Anthropic API Key\n"
         "[3] View configured providers\n"
-        "[4] Select Model A\n"
-        "[5] Select Model B\n"
+        "[4] Select Question Generator\n"
+        "[5] Select Model A\n"
+        "[6] Select Model B\n"
+        "[7] Select Judge\n"
         "\n"
         "Press TAB to return to menu.\n"
         "ENTER OPTION:\n"
@@ -1111,6 +1158,18 @@ def get_screen_text():
 
     if state == STATE_API_VIEW_PROVIDERS:
         return build_provider_status_screen()
+
+    if state == STATE_API_SELECT_GENERATOR:
+        return build_model_selector_screen("GENERATOR")
+
+    if state == STATE_API_SELECT_MODEL_A:
+        return build_model_selector_screen("A")
+
+    if state == STATE_API_SELECT_MODEL_B:
+        return build_model_selector_screen("B")
+
+    if state == STATE_API_SELECT_JUDGE:
+        return build_model_selector_screen("JUDGE")
 
     if state == STATE_API_SELECT_MODEL_A:
         return build_model_selector_screen("A")
@@ -1544,12 +1603,22 @@ while running:
 
                 elif event.unicode == "4":
                     play_enter_click()
-                    state = STATE_API_SELECT_MODEL_A
+                    state = STATE_API_SELECT_GENERATOR
                     buffer = ""
 
                 elif event.unicode == "5":
                     play_enter_click()
+                    state = STATE_API_SELECT_MODEL_A
+                    buffer = ""
+
+                elif event.unicode == "6":
+                    play_enter_click()
                     state = STATE_API_SELECT_MODEL_B
+                    buffer = ""
+
+                elif event.unicode == "7":
+                    play_enter_click()
+                    state = STATE_API_SELECT_JUDGE
                     buffer = ""
 
                 elif event.key == pygame.K_TAB:
@@ -1609,6 +1678,51 @@ while running:
                     state = STATE_API_SETTINGS
                     buffer = ""
                     play_enter_click()
+
+            elif state == STATE_API_SELECT_GENERATOR:
+                if event.unicode in SELECTABLE_MODELS:
+                    set_selected_model("GENERATOR", event.unicode)
+                    state = STATE_API_SETTINGS
+                    play_enter_click()
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_API_SETTINGS
+                    buffer = ""
+                    play_enter_click()
+
+            elif state == STATE_API_SELECT_MODEL_A:
+                if event.unicode in SELECTABLE_MODELS:
+                    set_selected_model("A", event.unicode)
+                    state = STATE_API_SETTINGS
+                    play_enter_click()
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_API_SETTINGS
+                    buffer = ""
+                    play_enter_click()
+
+            elif state == STATE_API_SELECT_MODEL_B:
+                if event.unicode in SELECTABLE_MODELS:
+                    set_selected_model("B", event.unicode)
+                    state = STATE_API_SETTINGS
+                    play_enter_click()
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_API_SETTINGS
+                    buffer = ""
+                    play_enter_click()
+
+            elif state == STATE_API_SELECT_JUDGE:
+                if event.unicode in SELECTABLE_MODELS:
+                    set_selected_model("JUDGE", event.unicode)
+                    state = STATE_API_SETTINGS
+                    play_enter_click()
+
+                elif event.key == pygame.K_TAB:
+                    state = STATE_API_SETTINGS
+                    buffer = ""
+                    play_enter_click()
+
 
             elif state == STATE_API_SELECT_MODEL_A:
                 if event.unicode in SELECTABLE_MODELS:

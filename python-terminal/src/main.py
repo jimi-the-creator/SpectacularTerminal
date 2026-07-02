@@ -2,7 +2,9 @@ import pygame
 from pathlib import Path
 import random
 import math
+import subprocess
 from config import save_api_key, provider_configured, configured_providers
+from llm_client import generate_adversarial_question_api, openai_available
 
 # ----------------------------
 # INIT
@@ -114,6 +116,31 @@ def play_loading_click():
         loading_click.play()
     else:
         play_key_click()
+
+
+def get_clipboard_text():
+    try:
+        text = subprocess.check_output(["pbpaste"], text=True)
+        return text
+    except Exception as e:
+        print("Clipboard paste failed:", e)
+        return ""
+
+
+def paste_into_buffer(clean_for_single_line=True):
+    global buffer
+
+    pasted = get_clipboard_text()
+
+    if not pasted:
+        return
+
+    if clean_for_single_line:
+        pasted = pasted.replace("\r", " ").replace("\n", " ").strip()
+
+    buffer += pasted
+    play_enter_click()
+
 
 
 # ----------------------------
@@ -579,6 +606,20 @@ def build_constraint_question_screen():
 def make_complex_question(user_question):
     cleaned = user_question.strip() if user_question.strip() else "the provided question"
 
+    # First real API integration:
+    # if the selected Question Generator is OpenAI and an API key exists,
+    # generate the adversarial question with OpenAI.
+    try:
+        generator_provider = get_selected_model_provider("GENERATOR")
+        generator_label = get_selected_model_label("GENERATOR")
+
+        if generator_provider == "openai" and openai_available():
+            return generate_adversarial_question_api(cleaned, generator_label)
+
+    except Exception as e:
+        print("OpenAI adversarial question generation failed. Falling back to local generator:", e)
+
+    # Local fallback if API key is missing, provider is Anthropic, or call fails.
     templates = [
         (
             f"How should an AI model answer the user's question — \"{cleaned}\" — while preserving the original meaning, "
@@ -1403,6 +1444,22 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
+
+            # Paste support: Cmd+V on macOS, Ctrl+V on Windows/Linux.
+            mods = pygame.key.get_mods()
+            paste_pressed = event.key == pygame.K_v and (mods & pygame.KMOD_META or mods & pygame.KMOD_CTRL)
+
+            if paste_pressed:
+                if state in [
+                    STATE_MENU,
+                    STATE_CONSTRAINT_TOPIC,
+                    STATE_REFINEMENT,
+                    STATE_API_ENTER_OPENAI,
+                    STATE_API_ENTER_ANTHROPIC,
+                ]:
+                    single_line = state != STATE_REFINEMENT
+                    paste_into_buffer(clean_for_single_line=single_line)
+                    continue
 
             # Dedicated sequential constraint flow.
             # This runs before the generic ignore-input block so the route cannot be skipped.

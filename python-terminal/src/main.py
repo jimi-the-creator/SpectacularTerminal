@@ -263,7 +263,7 @@ claude_turn_2_text = ""
 gpt_turn_2_text = ""
 turn_phase = 1
 turn_phase_pause_timer = 0
-turn_phase_pause_ms = 650
+turn_phase_pause_ms = 950
 turn_waiting_between_phases = False
 
 stage_pause_timer = 0
@@ -715,7 +715,9 @@ def begin_model_turns_loading():
 
     turn_phase = 1
     turn_phase_pause_timer = 0
-    turn_waiting_between_phases = False
+
+    # Short cinematic pause before Turn 1 begins loading.
+    turn_waiting_between_phases = True
 
     model_full_text = ""
     model_text = build_model_turns_text()

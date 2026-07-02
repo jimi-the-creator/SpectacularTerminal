@@ -3,8 +3,9 @@ from pathlib import Path
 import random
 import math
 import subprocess
+import json
 from config import save_api_key, provider_configured, configured_providers
-from llm_client import generate_adversarial_question_api, openai_available, run_turn_one_api, run_turn_two_api
+from llm_client import generate_adversarial_question_api, openai_available, run_turn_one_api, run_turn_two_api, run_judge_api
 
 # ----------------------------
 # INIT
@@ -337,6 +338,8 @@ stage_pause_ms = 550
 final_result_text = ""
 last_report_path = ""
 report_status_text = ""
+judge_scores = None
+judge_status_text = ""
 
 run_full_text = ""
 run_text = ""
@@ -800,8 +803,119 @@ def build_model_turns_text():
 
     return text
 
-def build_final_result_screen():
+
+def parse_judge_json(raw_text):
+    cleaned = raw_text.strip()
+
+    if cleaned.startswith("```"):
+        cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+
+    data = json.loads(cleaned)
+
+    return {
+        "claude_score": data.get("model_a_score", "5/10"),
+        "gpt_score": data.get("model_b_score", "5/10"),
+        "model_a_adherence": data.get("model_a_adherence", "medium"),
+        "model_b_adherence": data.get("model_b_adherence", "medium"),
+        "model_a_evidence": data.get("model_a_evidence", ["No Model A evidence returned."]),
+        "model_b_evidence": data.get("model_b_evidence", ["No Model B evidence returned."]),
+        "winner": data.get("winner", "Judge returned an incomplete result."),
+        "reason": data.get("reason", "The judge did not provide a complete reason."),
+    }
+
+
+def format_evidence_lines(title, evidence_items):
+    text = title + "\n"
+
+    if not evidence_items:
+        text += "- No evidence returned.\n"
+        return text
+
+    for item in evidence_items[:3]:
+        text += f"- {item}\n"
+
+    return text
+
+def get_judge_scores():
+    if judge_scores:
+        return judge_scores
+
     scores = calculate_mock_scores()
+    scores["model_a_adherence"] = "medium"
+    scores["model_b_adherence"] = "medium-high"
+    scores["model_a_evidence"] = [
+        "Fallback judge used; no live Model A evidence was generated.",
+        "Run with an OpenAI judge selected to produce evidence-backed scoring."
+    ]
+    scores["model_b_evidence"] = [
+        "Fallback judge used; no live Model B evidence was generated.",
+        "Run with an OpenAI judge selected to produce evidence-backed scoring."
+    ]
+    return scores
+
+
+def begin_final_result():
+    global state, judge_scores, judge_status_text
+
+    judge_label = get_selected_model_label("JUDGE")
+    judge_provider = get_selected_model_provider("JUDGE")
+    model_a = get_selected_model_label("A")
+    model_b = get_selected_model_label("B")
+    constraint_instruction = get_combined_constraint_instruction()
+
+    judge_status_text = "Judge running..."
+    print(f"Running Judge with {judge_label}...")
+
+    try:
+        if judge_provider == "openai" and openai_available():
+            raw = run_judge_api(
+                judge_label,
+                selected_topic,
+                complex_question_text,
+                constraint_instruction,
+                model_a,
+                model_b,
+                claude_turn_1_full,
+                gpt_turn_1_full,
+                claude_turn_2_full,
+                gpt_turn_2_full,
+            )
+            judge_scores = parse_judge_json(raw)
+            judge_status_text = f"Judge completed with {get_selected_model_display('JUDGE')}"
+        else:
+            judge_scores = calculate_mock_scores()
+            judge_scores["model_a_adherence"] = "medium"
+            judge_scores["model_b_adherence"] = "medium-high"
+            judge_scores["model_a_evidence"] = [
+                "Fallback judge used; no live Model A evidence was generated.",
+                "Select an OpenAI judge to produce evidence-backed scoring."
+            ]
+            judge_scores["model_b_evidence"] = [
+                "Fallback judge used; no live Model B evidence was generated.",
+                "Select an OpenAI judge to produce evidence-backed scoring."
+            ]
+            judge_status_text = f"Judge fallback used because {get_selected_model_display('JUDGE')} is not configured for API judging yet."
+
+    except Exception as e:
+        print("Judge API failed. Falling back to local judge:", e)
+        judge_scores = calculate_mock_scores()
+        judge_scores["model_a_adherence"] = "medium"
+        judge_scores["model_b_adherence"] = "medium-high"
+        judge_scores["model_a_evidence"] = [
+            "Judge API failed; no live Model A evidence was generated.",
+            "The displayed result is from the local fallback judge."
+        ]
+        judge_scores["model_b_evidence"] = [
+            "Judge API failed; no live Model B evidence was generated.",
+            "The displayed result is from the local fallback judge."
+        ]
+        judge_status_text = f"Judge API failed; local judge fallback used: {e}"
+
+    state = STATE_FINAL_RESULT
+
+
+def build_final_result_screen():
+    scores = get_judge_scores()
     model_a = get_selected_model_label("A")
     model_b = get_selected_model_label("B")
     judge = get_selected_model_label("JUDGE")
@@ -814,6 +928,7 @@ def build_final_result_screen():
         "FINAL RESULT\n"
         "\n"
         f"Judge: {judge}\n"
+        f"Judge Status: {judge_status_text}\n"
         "\n"
         "USER QUESTION:\n"
         f"{selected_topic}\n\n"
@@ -821,14 +936,17 @@ def build_final_result_screen():
         f"{complex_question_text}\n\n"
         f"{model_a.upper()}\n"
         f"Conflict Score: {scores['claude_score']}\n"
-        "Constraint Adherence: medium\n\n"
+        f"Constraint Adherence: {scores.get('model_a_adherence', 'medium')}\n\n"
         f"{model_b.upper()}\n"
         f"Conflict Score: {scores['gpt_score']}\n"
-        "Constraint Adherence: medium-high\n\n"
+        f"Constraint Adherence: {scores.get('model_b_adherence', 'medium-high')}\n\n"
         "RESULT:\n"
         f"{scores['winner']}\n\n"
         "REASON:\n"
         f"{scores['reason']}\n\n"
+        "EVIDENCE:\n"
+        f"{format_evidence_lines('Model A evidence:', scores.get('model_a_evidence', []))}\n"
+        f"{format_evidence_lines('Model B evidence:', scores.get('model_b_evidence', []))}\n"
         "IN PLAIN ENGLISH:\n"
         "The judge compares the gap between Turn 1 and Turn 2.\n"
         "A smaller gap means the model stayed more consistent under pressure.\n"
@@ -864,6 +982,10 @@ def begin_model_turns_loading():
     global claude_turn_1_full, gpt_turn_1_full, claude_turn_2_full, gpt_turn_2_full
     global claude_turn_1_text, gpt_turn_1_text, claude_turn_2_text, gpt_turn_2_text
     global turn_phase, turn_phase_pause_timer, turn_waiting_between_phases
+    global judge_scores, judge_status_text
+
+    judge_scores = None
+    judge_status_text = ""
 
     model_a = get_selected_model_label("A")
     model_b = get_selected_model_label("B")
@@ -909,7 +1031,7 @@ def save_constraint_report():
     filename = "constraint_conflict_report.txt"
     report_path = reports_dir / filename
 
-    scores = calculate_mock_scores()
+    scores = get_judge_scores()
     generator = get_selected_model_label("GENERATOR")
     model_a = get_selected_model_label("A")
     model_b = get_selected_model_label("B")
@@ -946,7 +1068,11 @@ def save_constraint_report():
         "JUDGE RESULT:\n"
         f"{scores['winner']}\n\n"
         "JUDGE REASON:\n"
-        f"{scores['reason']}\n"
+        f"{scores['reason']}\n\n"
+        "MODEL A EVIDENCE:\n"
+        f"{format_evidence_lines('', scores.get('model_a_evidence', []))}\n"
+        "MODEL B EVIDENCE:\n"
+        f"{format_evidence_lines('', scores.get('model_b_evidence', []))}\n"
     )
 
     report_path.write_text(report)
@@ -1704,8 +1830,8 @@ while running:
 
             elif state == STATE_MODEL_TURNS_PAUSE:
                 if event.key == pygame.K_RETURN:
-                    state = STATE_FINAL_RESULT
                     play_enter_click()
+                    begin_final_result()
 
                 elif event.key == pygame.K_TAB:
                     reset_to_menu()

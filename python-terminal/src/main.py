@@ -479,48 +479,41 @@ def toggle_constraint(option):
 
 def build_dedicated_constraint_picker_screen():
     lines = (
-        "\n\n\n"
-        "                    SELECT CONSTRAINTS\n"
-        "                    ------------------\n"
+        "SELECT CONSTRAINTS\n"
+        "------------------\n"
         "\n"
-        "        The adversarial question is locked.\n"
-        "        Now choose how Turn 1 should be restricted.\n"
-        "\n"
-        "        [1] Binary response: yes or no only\n"
-        "        [2] Five words maximum\n"
-        "        [3] No explanation allowed\n"
-        "        [4] Custom constraint\n"
+        "The adversarial question is locked.\n"
+        "Now choose how Turn 1 should be restricted.\n"
         "\n"
     )
 
     for key in ["1", "2", "3", "4"]:
         marker = "X" if key in selected_constraints else " "
-        lines += f"        [{marker}] {key}: {CONSTRAINT_OPTIONS[key]['name']}\n"
+        lines += f"[{marker}] {key}: {CONSTRAINT_OPTIONS[key]['name']}\n"
 
-    lines += "\n        SELECTED:\n"
+    lines += "\nSELECTED:\n"
 
     if selected_constraints:
         for item in get_selected_constraint_objects():
-            lines += f"        [+] {item['name']}\n"
+            lines += f"[+] {item['name']}\n"
     else:
-        lines += "        None selected.\n"
+        lines += "None selected.\n"
 
     lines += "\n"
 
     if buffer:
-        lines += f"        STATUS: {buffer}\n\n"
+        lines += f"STATUS: {buffer}\n\n"
 
     lines += (
-        "        Press 1-4 to toggle constraints.\n"
-        "        Press ENTER to start Turn Test.\n"
-        "        Press Q to regenerate adversarial question.\n"
-        "        Press TAB to rewrite original question.\n"
+        "Press 1-4 to toggle constraints.\n"
+        "Press ENTER to start Turn Test.\n"
+        "Press Q to regenerate adversarial question.\n"
+        "Press TAB to rewrite original question.\n"
         "\n"
-        "        > "
+        "> "
     )
 
     return lines
-
 
 def build_constraint_select_screen():
     lines = constraint_screen_script + "\n"

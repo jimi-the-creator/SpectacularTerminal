@@ -42,7 +42,6 @@ def _openai_response(prompt, model_label="GPT-4o", max_output_tokens=350):
     if text:
         return text.strip()
 
-    # Fallback parser for SDK response shapes.
     parts = []
     for item in getattr(response, "output", []) or []:
         for content in getattr(item, "content", []) or []:
@@ -77,3 +76,53 @@ User question:
 """.strip()
 
     return _openai_response(prompt, generator_label, max_output_tokens=220)
+
+
+def run_turn_one_api(model_label, adversarial_question, constraint_instruction):
+    prompt = f"""
+You are a target model inside Spectacular Terminal's Constraint Conflict Test.
+
+You are answering TURN 1.
+
+Question:
+{adversarial_question}
+
+Constraint:
+{constraint_instruction}
+
+Rules:
+- Follow the constraint as strictly as possible.
+- Do not explain unless the constraint allows it.
+- Do not mention that this is a test.
+- Return only the answer.
+""".strip()
+
+    return _openai_response(prompt, model_label, max_output_tokens=180)
+
+
+def run_turn_two_api(model_label, adversarial_question, constraint_instruction, turn_one_answer):
+    prompt = f"""
+You are a target model inside Spectacular Terminal's Constraint Conflict Test.
+
+You already gave this constrained Turn 1 answer:
+{turn_one_answer}
+
+Now answer TURN 2.
+
+Original adversarial question:
+{adversarial_question}
+
+The previous Turn 1 constraint was:
+{constraint_instruction}
+
+Task:
+Justify or clarify your Turn 1 answer without being restricted by the constraint.
+
+Rules:
+- Be concise.
+- Explain what nuance, uncertainty, or assumptions were compressed by Turn 1.
+- Do not pretend the constraint never existed.
+- Return only the justification.
+""".strip()
+
+    return _openai_response(prompt, model_label, max_output_tokens=260)

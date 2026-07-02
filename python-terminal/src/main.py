@@ -4,7 +4,7 @@ import random
 import math
 import subprocess
 from config import save_api_key, provider_configured, configured_providers
-from llm_client import generate_adversarial_question_api, openai_available
+from llm_client import generate_adversarial_question_api, openai_available, run_turn_one_api, run_turn_two_api
 
 # ----------------------------
 # INIT
@@ -643,7 +643,21 @@ def make_complex_question(user_question):
 
 def build_turn_one_answer(model_name):
     selected_keys = set(selected_constraints)
+    constraint_instruction = get_combined_constraint_instruction()
 
+    # Real OpenAI Turn 1 when selected model is OpenAI-backed.
+    try:
+        if model_name in ["GPT-4o", "GPT-4o Mini"] and openai_available():
+            return run_turn_one_api(
+                model_name,
+                complex_question_text,
+                constraint_instruction
+            )
+
+    except Exception as e:
+        print(f"{model_name} Turn 1 API failed. Falling back to local mock:", e)
+
+    # Local fallback if API is unavailable, selected model is Claude, or the call fails.
     if "1" in selected_keys:
         return "No."
 
@@ -657,10 +671,27 @@ def build_turn_one_answer(model_name):
 
     return "It depends."
 
-
-def build_turn_two_answer(model_name):
+def build_turn_two_answer(model_name, turn_one_answer=None):
     selected_keys = set(selected_constraints)
+    constraint_instruction = get_combined_constraint_instruction()
 
+    if turn_one_answer is None:
+        turn_one_answer = ""
+
+    # Real OpenAI Turn 2 when selected model is OpenAI-backed.
+    try:
+        if model_name in ["GPT-4o", "GPT-4o Mini"] and openai_available():
+            return run_turn_two_api(
+                model_name,
+                complex_question_text,
+                constraint_instruction,
+                turn_one_answer
+            )
+
+    except Exception as e:
+        print(f"{model_name} Turn 2 API failed. Falling back to local mock:", e)
+
+    # Local fallback if API is unavailable, selected model is Claude, or the call fails.
     if model_name == "Claude":
         if "1" in selected_keys:
             return (
@@ -680,7 +711,6 @@ def build_turn_two_answer(model_name):
     return (
         "The constrained answer stays mostly consistent, but the unconstrained explanation reveals that the original question needs more nuance than the format allows."
     )
-
 
 def calculate_mock_scores():
     selected_keys = set(selected_constraints)
@@ -824,10 +854,17 @@ def begin_model_turns_loading():
     model_a = get_selected_model_label("A")
     model_b = get_selected_model_label("B")
 
+    print(f"Running Model A Turn 1 with {model_a}...")
     claude_turn_1_full = build_turn_one_answer(model_a)
+
+    print(f"Running Model B Turn 1 with {model_b}...")
     gpt_turn_1_full = build_turn_one_answer(model_b)
-    claude_turn_2_full = build_turn_two_answer(model_a)
-    gpt_turn_2_full = build_turn_two_answer(model_b)
+
+    print(f"Running Model A Turn 2 with {model_a}...")
+    claude_turn_2_full = build_turn_two_answer(model_a, claude_turn_1_full)
+
+    print(f"Running Model B Turn 2 with {model_b}...")
+    gpt_turn_2_full = build_turn_two_answer(model_b, gpt_turn_1_full)
 
     claude_turn_1_text = ""
     gpt_turn_1_text = ""
